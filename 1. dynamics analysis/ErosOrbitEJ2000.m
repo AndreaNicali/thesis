@@ -16,7 +16,7 @@ cspice_furnsh('kernels\erosephem_1999004_2002181.bsp')
 cspice_furnsh('kernels\erosatt_1998329_2001157_v01.bpc');
 
 %% Orbit of 433 Eros around the Sun, visualization of body frame
-
+%cacacaaacacacac
 id_eros = cspice_spkobj('kernels\erosephem_1999004_2002181.bsp', 1);
 
 %Define a time vector for the propagations
