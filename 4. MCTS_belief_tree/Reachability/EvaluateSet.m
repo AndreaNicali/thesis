@@ -50,7 +50,7 @@ for k = 2:size(U0,2)
     [xx_k,tt_k] = integrate_ode_reachability(xx0_k,t0,tf,tstep); % Propagate sample
 
     % Score function
-    [J_hist, dJ_dt_hist] = total_score(xx_k, tt_k,P0, spacecraft_data); % Can be any user defined function
+    [J_hist, dJ_dt_hist] = total_score(xx_k, tt_k, P0, spacecraft_data); % Can be any user defined function
 
     % Process the flow to compute the next maneuvering point
     % Note that flow_processing uses the derivatives of the score

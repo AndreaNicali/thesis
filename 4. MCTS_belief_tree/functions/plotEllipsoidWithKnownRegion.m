@@ -1,63 +1,46 @@
-function plotEllipsoidWithKnownRegion(F, V, known_map, score)
-% Plot the ellipsoid:
-% - Unknown faces in grey
-% - Known faces colored by score using jet colormap (0 = blue, >0 = warmer)
-% 
-% Inputs:
-% - F: faces (Nx3)
-% - V: vertices (Mx3)
-% - known_map: logical vector (Nx1), 1 if known, 0 if unknown
-% - score: score per face (Nx1)
+function plotEllipsoidWithKnownRegion(F, V, score_struct, known_map)
+% Visualizza un ellissoide con:
+% - Facce grigie per zone non conosciute
+% - Facce colorate dal giallo (basso score) al rosso (alto score)
 
-% Indici noti e ignoti
-known_index = known_map == 1;
-unknown_index = known_map == 0;
+    hold on;
+    axis equal;
+    view(3);
+    xlabel('X'); ylabel('Y'); zlabel('Z');
+    title('Ellissoide con zone conosciute e punteggiate');
+    grid on
+    grid minor
 
-% Plot facce sconosciute (in grigio)
-patch('Faces', F(unknown_index,:), 'Vertices', V, ...
-      'FaceColor', [0.85 0.85 0.85], 'EdgeColor', 'none');
-hold on;
+    % Estrai punteggi
+    scores = arrayfun(@(s) s.score, score_struct);
 
-% Se ci sono facce conosciute...
-if any(known_index)
-    % Estrai i punteggi solo delle facce conosciute
-    known_scores = score(known_index);
-
-    % Normalizza i punteggi > 0 per usare la colormap jet
-    max_score = max(known_scores);
-    min_score = min(known_scores(known_scores > 0));
-    % Evita divisione per zero
-    if isempty(min_score) || max_score == 0
-        min_score = 0; max_score = 1;
+    % Mappa colore personalizzata
+    % Giallo = punteggio 0 -> Rosso = punteggio massimo
+    max_score = max(scores);
+    if max_score == 0
+        max_score = 1; % evita divisione per zero
     end
 
-    % Mappa dei colori: 256 colori di jet
-    cmap = jet(256);
+    face_colors = zeros(size(F,1), 3);
 
-    % Colori finali per ogni faccia conosciuta
-    face_colors = zeros(sum(known_index), 3);
-    for i = 1:sum(known_index)
-        s = known_scores(i);
-        if s <= 0
-            face_colors(i,:) = [0 0 0.5];  % blu fisso
+    for i = 1:size(F,1)
+        if known_map(i) == 0
+            face_colors(i, :) = [0.6 0.6 0.6];  % grigio per sconosciuti
         else
-            % Normalizza tra 1 e 256
-            idx = round(1 + (s - min_score) / (max_score - min_score) * 255);
-            idx = max(min(idx, 256), 1);  % clampa
-            face_colors(i,:) = cmap(idx,:);
+            % Colore da giallo (1,1,0) a rosso (1,0,0)
+            s = scores(i) / max_score; % normalizza score
+            face_colors(i, :) = [1, 1 - s, 0]; % giallo → rosso
         end
     end
 
-    % Plot delle facce conosciute con colorazione personalizzata
-    patch('Faces', F(known_index,:), 'Vertices', V, ...
-          'FaceVertexCData', face_colors, ...
-          'FaceColor', 'flat', ...
-          'EdgeColor', 'k', 'LineWidth', 0.3);
+    % Disegna la mesh
+    patch('Faces', F, 'Vertices', V, ...
+        'FaceVertexCData', face_colors, ...
+        'FaceColor', 'flat', ...
+        'EdgeColor', 'k'); % Bordi neri
+
+    % Aggiungi legenda colore per le zone conosciute
+    colormap(gca, [linspace(1,1,100)' linspace(1,0,100)' zeros(100,1)]); % giallo → rosso
+    colorbar;
 end
 
-axis equal; view(3); grid on;
-xlabel('X'); ylabel('Y'); zlabel('Z');
-colorbar; colormap(jet);
-title('Ellipsoid with Known Regions Colored by Score');
-
-end

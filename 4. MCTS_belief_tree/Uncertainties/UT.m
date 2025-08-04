@@ -23,7 +23,7 @@ for i = 1:size(sp, 2)
         a = 0;
     end
     %Propagate each sigma points
-    [~, propag] = ode78(@(t,x) model_rotating_dynamics(t, x, mass_eros, omega_body, C20, C22), [et_i, et_f], sp(:, i), options);
+    [~, propag] = ode78(@(t,x) dynamicsEllipsoid(t, x, mass_eros, omega_body, C20, C22), [et_i, et_f], sp(:, i), options);
     y(:, i) = propag(end, :)';
 
 

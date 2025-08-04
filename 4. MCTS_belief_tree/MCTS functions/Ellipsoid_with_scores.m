@@ -48,13 +48,13 @@ scores = zeros(size(F,1), length(centres));
 id = zeros(size(F,1), 1);
 
 % Score per ogni feature
-sigma = 1;
+sigma = 0.5;
 for s = 1:length(centres)
     c = centroids(centres(s), :);
     dist = vecnorm(centroids - c, 2, 2);
     spot_score = exp(-(dist.^2) / (2*sigma^2)) * vals(s);
-    spot_score = spot_score / max(spot_score);
     spot_score(spot_score < 1e-2) = 0;
+    spot_score(spot_score > 0) = vals(s);
     
     scores(:, s) = spot_score;
     id(spot_score > 0) = centres(s);
@@ -72,7 +72,7 @@ for f = 1:size(F,1)
         feature_idx = id(f);
         
         switch feature_idx
-            case {centres(1), centres(3)}
+            case {centres(1)}
                 score_struct(f).type = 'emission';
                 score_struct(f).angles = [0 19; 20 39; 40 59; 60 79]*pi/180;
                 score_struct(f).completeness = [0; 0; 0; 0];
@@ -80,7 +80,7 @@ for f = 1:size(F,1)
                 score_struct(f).ideal_range = 35;
                 score_struct(f).actual_range = nan(size(score_struct(f).completeness));
 
-            case {centres(2), centres(4)}
+            case {centres(2)}
                 score_struct(f).type = 'relative';
                 score_struct(f).angles = [0 10; 70 80]*pi/180;
                 score_struct(f).completeness = [0; 0];   

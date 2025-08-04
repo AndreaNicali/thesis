@@ -20,7 +20,7 @@ options = odeset('reltol', 1e-12, 'abstol', [ones(3,1)*1e-8; ones(3,1)*1e-11]);
 
 %Epoch
 t0 = cspice_str2et('2000-08-01 T01:00:00');
-tf = cspice_str2et('2000-08-01 T05:00:00');
+tf = cspice_str2et('2000-08-01 T11:00:00');
 tt = t0:100:tf;
 
 %Initial Condition
@@ -39,12 +39,12 @@ mass_eros = 6.687e15;
 a = 20.591;
 b = 5.711;
 c = 5.332;
-n1 = 50;
-n2 = 30;
+n1 = 30;
+n2 = 20;
 
 % Features positioning
-centres = [100, 700, 1100, 300];
-vals = [2, 3, 5, 4];
+centres = [120, 965];
+vals = [1, 2];
 
 % Asteroid model generation
 [F, V, N, C20, C22, A, score] = Ellipsoid_with_scores(a, b, c, n1, n2, centres, vals);
@@ -53,11 +53,11 @@ vals = [2, 3, 5, 4];
 
 face_centroids = (V(F(:,1), :) + V(F(:,2), :) + V(F(:,3), :)) / 3;
 known_map = double( ...
-    face_centroids(:,1) < 0 & ...
-    face_centroids(:,2) < 0 & ...
-    face_centroids(:,3) < 0 );
+    face_centroids(:,1) > 0 & ...
+    face_centroids(:,2) > 0 & ...
+    face_centroids(:,3) > 0 );
 
-%known_map = zeros(size(F, 1), 1);
+%known_map = ones(size(F, 1), 1);
 
 %Features for navigation
 nav_index = [   7,   12,   17,   24,   53,   62,   79,   86,   88,  116,  120, ...
@@ -67,9 +67,10 @@ nav_index = [   7,   12,   17,   24,   53,   62,   79,   86,   88,  116,  120, .
   657,  674,  707,  708,  719,  749,  761,  763,  781,  786,  817, ...
   819,  836,  847,  849,  850,  867,  881,  901,  907,  911,  912, ...
   934,  953,  999, 1004, 1009, 1025, 1040, 1041, 1052, 1066, 1090, ...
- 1102, 1105, 1106, 1127, 1205, 1223, 1226, 1227, 1264, 1266, 1282, ...
- 1338, 1343, 1348, 1358, 1385, 1402, 1410, 1415, 1431, 1447, 1456, ...
- 1466];
+ 1102]; 
+ %1105, 1106, 1127, 1205, 1223, 1226, 1227, 1264, 1266, 1282, ...
+ %1338, 1343, 1348, 1358, 1385, 1402, 1410, 1415, 1431, 1447, 1456, ...
+ %1466];
 
 %Put data in struct
 spacecraft_data = struct();
@@ -81,8 +82,8 @@ spacecraft_data.data_guidance.safety_margin = 1*3600;
 spacecraft_data.data_guidance.DeltaT_after_man = 0.3*3600;
 spacecraft_data.data_guidance.r_impact = 24;
 spacecraft_data.data_guidance.r_escape = 100;
-spacecraft_data.data_guidance.fov1 = 20*pi/180;
-spacecraft_data.data_guidance.fov2 = 20*pi/180;
+spacecraft_data.data_guidance.fov1 = 8*pi/180;
+spacecraft_data.data_guidance.fov2 = 8*pi/180;
 
 spacecraft_data.data_asteroids.Faces = F;
 spacecraft_data.data_asteroids.Vertexes = V;
@@ -100,35 +101,35 @@ spacecraft_data.data_asteroids.navigation = nav_index;
 
 model_dyn = @(t, x) dynamicsEllipsoid(t, x, mass_eros, omega_body, C20, C22);
 
-%% Prova ExploreU
-[xx,tt] = integrateODE([r0; v0], tt);
 
-profile clear
-profile on
-[J_of_t, dJdt, new_scores, new_known_map, mapping_score_t, exploit_score_t, nav_score]  = total_score(xx, tt, P0, spacecraft_data);
-profile off
-profile viewer
-
+%%
 profile clear
 profile on
 [uu_opt,th_opt,J_opt,U,J,T,S,I] = exploreU([r0; v0], P0 ,t0,spacecraft_data);
 profile off
 profile viewer
-
-figure(1)
-plotEllipsoidWithKnownRegion(F, V, new_known_map, [score.score]);
-hold on
-plot3(xx(:, 1), xx(:, 2), xx(:, 3), 'LineWidth', 1.5);
-plot_sun_pointing_vector(tt)
-
 [xx_opt,tt_opt] = integrateODE([r0; v0+uu_opt], t0:100:th_opt);
-[J_of_t, dJdt, new_scores_opt, new_known_map_opt, mapping_score_t_opt, exploit_score_t_opt, nav_score_opt] = total_score(xx_opt, tt_opt, P0, spacecraft_data);
+
+[J_of_t_opt, dJdt_opt, new_scores_opt, new_known_map_opt, mapping_score_t_opt, exploit_score_t_opt, nav_score_opt]  = total_score(xx_opt, tt_opt, P0, spacecraft_data);
 
 figure(2)
-plotEllipsoidWithKnownRegion(F, V, new_known_map_opt, [score.score]);
+plot3(xx_opt(:, 1), xx_opt(:, 2), xx_opt(:, 3), 'b', 'LineWidth', 1.5);
 hold on
-plot3(xx_opt(:, 1), xx_opt(:, 2), xx_opt(:, 3), 'LineWidth', 1.5);
-plot_sun_pointing_vector(tt_opt)
+plot3(xx_opt(1, 1), xx_opt(1, 2), xx_opt(1, 3), 'g.', 'MarkerSize', 12);
+plot3(xx_opt(end, 1), xx_opt(end, 2), xx_opt(end, 3), 'r.', 'MarkerSize', 12);
+plotEllipsoidWithKnownRegion(F, V, new_scores_opt, new_known_map_opt)
+plot_sun_pointing_vector(tt_opt);
+
+[xx0,tt] = integrateODE([r0; v0], t0:100:th_opt);
+[J_of_t, dJdt, new_scores, new_known_map, mapping_score_t, exploit_score_t, nav_score]  = total_score(xx0, tt, P0, spacecraft_data);
+
+figure(1)
+plot3(xx0(:, 1), xx0(:, 2), xx0(:, 3), 'b', 'LineWidth', 1.5);
+hold on
+plot3(xx0(1, 1), xx0(1, 2), xx0(1, 3), 'g.', 'MarkerSize', 12);
+plot3(xx0(end, 1), xx0(end, 2), xx0(end, 3), 'r.', 'MarkerSize', 12);
+plotEllipsoidWithKnownRegion(F, V, score, new_known_map)
+plot_sun_pointing_vector(tt);
 
 %% MCTS
 
@@ -143,21 +144,31 @@ P_start = P0;
 
 all_trees = {};
 initial_tree = {};
-for i = 1:5
-
-    max_iter = 20;
-    tree = MCTS_belief_based([r_start; v_start], P_start, t_start,  max_iter, spacecraft_data_new, initial_tree);
+truth_dyn = @(t, x) dynamics15(t, x, mass_eros, omega_body);
+for i = 1:1
+    max_iter = 50;
+    tree = MCTS_belief_based_reduced([r_start; v_start], P_start, t_start,  max_iter, spacecraft_data_new, initial_tree);
     [best_path, best_actions, best_final_times] = find_best_path(tree);
 
-    n_action_per_planning = 1;
+    [TT_real, XX_real] = compute_trajectory(tree{1}.state, best_final_times, best_actions, truth_dyn, options);
+    [J_of_t, dJdt, new_scores_real, new_known_map_real, mapping_score_t, exploit_score_t, nav_score] = total_score(XX_real, TT_real, P0, spacecraft_data);
+    
+    [TT_model, XX_model] = compute_trajectory(tree{1}.state, best_final_times, best_actions, model_dyn, options);
+    [J_of_t, dJdt, new_scores_model, new_known_map_model, mapping_score_t, exploit_score_t, nav_score] = total_score(XX_model, TT_model, P0, spacecraft_data);
 
-    [TT, XX] = compute_trajectory(tree{1}.state, best_final_times(1:(n_action_per_planning+1)), best_actions(:, 1:n_action_per_planning), model_dyn, options);
-    [J_of_t, dJdt, new_scores, new_known_map, mapping_score_t, exploit_score_t, nav_score] = total_score(XX, TT, P0, spacecraft_data);
-
-    initial_tree = update_tree(tree, best_path(n_action_per_planning+2), new_known_map, 0.2);
-    all_trees{i} = initial_tree;
+    all_trees{i} = tree;
 end
 
 profile off
 profile viewer
 
+slider(F, V, score, new_known_map, XX_model, TT_model)
+%%
+plotEllipsoidWithKnownRegion(F, V, score, new_known_map_model);
+hold on
+plot3(XX_real(:, 1), XX_real(:, 2), XX_real(:, 3), 'b', 'LineWidth', 1.5)
+plot3(XX_model(:, 1), XX_model(:, 2), XX_model(:, 3), 'r', 'LineWidth', 1.5)
+for i = 1:length(best_final_times)
+    man_point = find(TT_model == best_final_times(i));
+    plot3(XX_model(man_point, 1), XX_model(man_point, 2), XX_model(man_point, 3), 'r.', 'MarkerSize', 15);
+end

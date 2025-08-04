@@ -55,7 +55,7 @@ for i = 1:(length(tt)-1)
     %GENERATE PROPAGATED POSITIONS AND MEASURMENTS
     for j = 1:size(sp, 2)
 
-        [~ , prop] = ode78(@(t,x) model_rotating_dynamics(t, x, mass_eros, omega_body, C20, C22), [tt(i), tt(i+1)], sp(:, j), options);
+        [~ , prop] = ode78(@(t,x) dynamicsEllipsoid(t, x, mass_eros, omega_body, C20, C22), [tt(i), tt(i+1)], sp(:, j), options);
         chi(:, j) = prop(end, :);
             
         sim_measurements = feature_measurements(chi(:, j)', tt(i+1), spacecraft_data);
