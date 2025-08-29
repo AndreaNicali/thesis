@@ -121,7 +121,7 @@ spacecraft_data.data_asteroids.C22 = C22;
 
 %% PROPAGATE n OPTIMAL ARCS: GREEDY APPROACH
 %Data for the propagation of n optimal arcs from the initial conditions
-n = 4;
+n = 10;
 uu_opt_vec = zeros(3, n);
 th_opt_vec = zeros(n+1, 1);
 th_opt_vec(1) = t0;
