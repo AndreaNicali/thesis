@@ -2,7 +2,7 @@ function [P_filtered, filt_time] = navigation_for_MCTS(y, P0, t, spacecraft_data
 
 sigma_acc = 5e-9;
 
-sigma_meas = ( (90/3600*pi/180)^2 + (90/3600*pi/180)^2 ) ;
+sigma_meas = ( (40/3600*pi/180)^2 + (40/3600*pi/180)^2 ) ;
 
 [measurements] = feature_measurements(y, t, spacecraft_data);
 
@@ -16,7 +16,7 @@ end
 %Choose only a certain number of measurements
 [C,ia,ib] = intersect(measurements.coaltitude.time, t);
 
-nmax = length(t)/2;
+nmax = length(t);
 
 if length(C)>nmax
     n = length(C);
@@ -31,7 +31,7 @@ end
 
 y = reshape(y, [length(t), 6]);
 
-[xx_filtered, P_filtered] = UKF_forsebuono(y(1, :)', filt_time, measurements, P0, spacecraft_data, sigma_meas, sigma_acc);
+[xx_filtered, P_filtered] = UKF(y(1, :)', filt_time, measurements, P0, spacecraft_data, sigma_meas, sigma_acc);
 
 
 

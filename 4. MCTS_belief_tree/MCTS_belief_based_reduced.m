@@ -20,12 +20,12 @@ end
 
 %MCTS parameters
 node_ids = length(tree)+1;
-gamma = 0.2;
+gamma = 1;
 max_depth = 100;
 iter = 0;
 ka = 3;
 alpha_a = 0.1;
-c = sqrt(2)/(2);
+c = sqrt(2)/(3);
 
 ko = 3;
 alpha_o = 0.1;
@@ -178,8 +178,9 @@ for i  = 1:max_iterations
             action_node = tree{id_action};
 
             if visits+1 < N_obs_max %If an i-th node can be added, select the i-th best action to add the node
+
                 if ~issymmetric(P)
-                   s = 1;
+                    P = (P+P')/2;
                 end
                 state = mvnrnd(parent_node.state, P)' + [zeros(3, 1); action];
                 t0 = action_node.time;

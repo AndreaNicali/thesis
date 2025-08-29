@@ -70,7 +70,7 @@ for i = 1:n_time
         % === EXPLOITATION ===
         if known_map_features(j) == 1 && new_scores(j).score > 0
             for k = 1:length(new_scores(j).completeness)
-                if ~new_scores(j).completeness(k)
+                if new_scores(j).completeness(k) ~= 1
                     is_emission = strcmp(new_scores(j).type, 'emission');
                     is_relative = strcmp(new_scores(j).type, 'relative');
 
@@ -88,8 +88,19 @@ for i = 1:n_time
                                 %     if inside2
                                 %         inside3 = check_FOV(V(F(j, 3), :), r_now, fov1, fov2, R_cam);
                                 %         if inside3
-                                            new_scores(j).completeness(k) = 1;
-                                            new_scores(j).actual_range(k) = norm_rrel;
+                                            if isnan(new_scores(j).actual_range(k)) || abs(norm_rrel-new_scores(j).ideal_range) < abs(new_scores(j).actual_range(k)-new_scores(j).ideal_range)
+                                                new_scores(j).actual_range(k) = norm_rrel;
+                                                space = 2;
+                                                if norm_rrel < new_scores(j).ideal_range+space && norm_rrel > new_scores(j).ideal_range-space
+                                                    new_scores(j).completeness(k) = 1;
+                                                else 
+                                                    if norm_rrel < new_scores(j).ideal_range
+                                                        new_scores(j).completeness(k) = exp( -(norm_rrel - (new_scores(j).ideal_range - space))^2 / 2*0.5 );
+                                                    else
+                                                        new_scores(j).completeness(k) = exp( -(norm_rrel - (new_scores(j).ideal_range + space))^2 / 2*0.5 );
+                                                    end
+                                                end
+                                            end
                                 %         end
                                 %     end
                                 % end
@@ -111,8 +122,19 @@ for i = 1:n_time
                                 %     if inside2
                                 %         inside3 = check_FOV(V(F(j, 3), :), r_now, fov1, fov2, R_cam);
                                 %         if inside3
-                                            new_scores(j).completeness(k) = 1;
-                                            new_scores(j).actual_range(k) = norm_rrel;
+                                            if isnan(new_scores(j).actual_range(k)) || abs(norm_rrel-new_scores(j).ideal_range) < abs(new_scores(j).actual_range(k)-new_scores(j).ideal_range)
+                                                new_scores(j).actual_range(k) = norm_rrel;
+                                                space = 2;
+                                                if norm_rrel < new_scores(j).ideal_range+space && norm_rrel > new_scores(j).ideal_range-space
+                                                    new_scores(j).completeness(k) = 1;
+                                                else 
+                                                    if norm_rrel < new_scores(j).ideal_range
+                                                        new_scores(j).completeness(k) = exp( -(norm_rrel - (new_scores(j).ideal_range - space))^2 / 2*0.5 );
+                                                    else
+                                                        new_scores(j).completeness(k) = exp( -(norm_rrel - (new_scores(j).ideal_range + space))^2 / 2*0.5 );
+                                                    end
+                                                end
+                                            end
                                 %         end
                                 %     end
                                 % end
@@ -128,15 +150,19 @@ for i = 1:n_time
             if inc_angle > mapping.incidence(1) && inc_angle < mapping.incidence(2)
                 angle_emission = acos(dot(r_relative, normal_j) / (norm_rrel * norm(normal_j)));
                 if angle_emission > mapping.emission(1) && angle_emission < mapping.emission(2)
-                    inside1 = check_FOV(V(F(j, 1), :), r_now, fov1, fov2, R_cam);
-                    if inside1
-                        inside2 = check_FOV(V(F(j, 2), :), r_now, fov1, fov2, R_cam);
-                        if inside2
-                            inside3 = check_FOV(V(F(j, 3), :), r_now, fov1, fov2, R_cam);
-                            if inside3
-                                new_known_map(j) = 1;
+                    if norm_rrel < 50
+                    if norm_rrel > 0
+                        inside1 = check_FOV(V(F(j, 1), :), r_now, fov1, fov2, R_cam);
+                        if inside1
+                            inside2 = check_FOV(V(F(j, 2), :), r_now, fov1, fov2, R_cam);
+                            if inside2
+                                inside3 = check_FOV(V(F(j, 3), :), r_now, fov1, fov2, R_cam);
+                                if inside3
+                                    new_known_map(j) = 1;
+                                end
                             end
                         end
+                    end
                     end
                 end
             end
@@ -168,7 +194,6 @@ for i = 1:n_time
             if new_scores(j).completeness(k)
                 delta = new_scores(j).completeness(k) - old_scores(j).completeness(k);
                 s = delta * old_scores(j).score / length(old_scores(j).completeness);
-                s = s * exp(- (new_scores(j).actual_range(k) - new_scores(j).ideal_range)^2 / (2 * 100));
                 exploit_score_t(i) = exploit_score_t(i) + s;
             end
         end

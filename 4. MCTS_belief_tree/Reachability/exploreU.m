@@ -127,6 +127,7 @@ if data_guidance.ReachabilityScoreComputation == 1
 
         [~,id_best] = maxk(J,ns);
         counter = 0;
+        counter_2 = 0;
         stop_flag = 0;
         while stop_flag == 0
             % Loop over the best nodes
@@ -163,6 +164,16 @@ if data_guidance.ReachabilityScoreComputation == 1
                 counter = 0;
                 [~,id_best] = maxk(J,ns);
             end
+
+            counter_2 = counter_2 + 0;
+            if counter_2 == 100
+                stop_flag = 1;
+                U = P'*data_guidance.DeltaV_max;
+                [J_opt,id_max] = max(J);
+                uu_opt = U(:,id_max);
+                th_opt = T(id_max);
+            end
+
         end
 
     end

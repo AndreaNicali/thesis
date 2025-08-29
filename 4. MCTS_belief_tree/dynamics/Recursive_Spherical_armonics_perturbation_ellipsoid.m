@@ -7,6 +7,9 @@ r = y(1:3);
 G = astroConstants(1);
 R0 = 16; %da Determination of Shape, Gravity, and Rotational State of Asteroid 433 Eros
 rnorm = norm(r);
+if ~isreal(y)
+    ve = 2;
+end
 lambda = atan2(y(2), y(1));
 phi = asin(y(3)/rnorm);
 eta = sqrt(y(1)^2+y(2)^2);

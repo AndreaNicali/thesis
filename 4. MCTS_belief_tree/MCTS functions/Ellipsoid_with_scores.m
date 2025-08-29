@@ -62,30 +62,31 @@ end
 
 % Mappa finale dei punteggi
 score_map = sum(scores, 2);
+total_score = sum(score_map);
 
 % Costruzione score_struct come vettore di struct
 score_struct = repmat(struct('score', 0, 'type', '', 'angles', [], 'completeness', 0), size(F,1), 1);
 
 for f = 1:size(F,1)
     if score_map(f) > 0
-        score_struct(f).score = score_map(f);
+        score_struct(f).score = score_map(f)/total_score;
         feature_idx = id(f);
         
         switch feature_idx
-            case {centres(1)}
+            case {centres(1), centres(3)}
                 score_struct(f).type = 'emission';
                 score_struct(f).angles = [0 19; 20 39; 40 59; 60 79]*pi/180;
                 score_struct(f).completeness = [0; 0; 0; 0];
                 score_struct(f).id = feature_idx;
-                score_struct(f).ideal_range = 35;
+                score_struct(f).ideal_range = 37;
                 score_struct(f).actual_range = nan(size(score_struct(f).completeness));
 
-            case {centres(2)}
+            case {centres(2), centres(4)}
                 score_struct(f).type = 'relative';
-                score_struct(f).angles = [0 10; 70 80]*pi/180;
-                score_struct(f).completeness = [0; 0];   
+                score_struct(f).angles = [0 19; 20 39; 40 59; 60 79]*pi/180;
+                score_struct(f).completeness = [0; 0; 0; 0];   
                 score_struct(f).id = feature_idx;
-                score_struct(f).ideal_range = 35;
+                score_struct(f).ideal_range = 37;
                 score_struct(f).actual_range = nan(size(score_struct(f).completeness));
 
         end

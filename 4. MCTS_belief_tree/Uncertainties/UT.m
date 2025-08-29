@@ -19,13 +19,10 @@ mass_eros = 6.687e15;
 options = odeset('reltol', 1e-12, 'abstol', [ones(3,1)*1e-8; ones(3,1)*1e-11]);
 
 for i = 1:size(sp, 2)
-    if any(~isreal(sp))
-        a = 0;
-    end
+
     %Propagate each sigma points
     [~, propag] = ode78(@(t,x) dynamicsEllipsoid(t, x, mass_eros, omega_body, C20, C22), [et_i, et_f], sp(:, i), options);
     y(:, i) = propag(end, :)';
-
 
 end
 
