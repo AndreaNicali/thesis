@@ -1,5 +1,6 @@
 function [nav_score] = navigationScore(y, P0, t, spacecraft_data)
 
+omega = spacecraft_data.data_asteroids.omega(3);
 [measurements] = measurementsFun(y, t, spacecraft_data);
 
 nav_bool = zeros(size(t));
@@ -13,7 +14,7 @@ end
 detPRef = -42;
 DU = 40;
 TU = sqrt( DU^3/(astroConstants(1)*spacecraft_data.data_asteroids.mass) );
-VU = DU/TU;
+VU = DU/TU + omega*DU;
 
 P_adim = zeros(size(P0));
 P_adim(1:3, 1:3) = P0(1:3, 1:3)/(DU*DU);
