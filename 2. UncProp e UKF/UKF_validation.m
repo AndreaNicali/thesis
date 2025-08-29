@@ -30,7 +30,7 @@ x_mean = [21.095697268161683; -31.527866008753950; -23.491639672861801;  -0.0114
 sigma_pos = 0.5e-1;
 sigma_vel = 0.3*10^(-4);
 P_initial = [eye(3)*sigma_pos^2, zeros(3); zeros(3),  eye(3)*sigma_vel^2];
-n_sample = 1;
+n_sample = 10;
 x_0_vec = zeros(6, n_sample);
 
 for i = 1:size(x_0_vec, 2)
@@ -94,8 +94,8 @@ spacecraft_data.data_asteroids.mass = mass_eros;
 measurements = struct();
 
 %Measurements noise
-sigma1 = 100; %37.2
-sigma2 = 100; %90
+sigma1 = 40; %37.2
+sigma2 = 40; %90
 sigma_angular = ( (sigma1/3600*pi/180)^2 + (sigma2/3600*pi/180)^2 ) ;
 sigma_range = ( (1/1000)^2 + (10/1000)^2 ) ;
 
@@ -118,6 +118,7 @@ Qk = sigma_acc^2 * [ ...
     0,   q12, 0,   0,   q22, 0;
     0,   0,   q12, 0,   0,   q22];
 
+%Qk = Qk + 1e-16*eye(6);
 %Measurement noise
 sigma_meas = sigma_angular;
 
@@ -168,6 +169,9 @@ for j = 1:size(x_0_vec, 2)
     end
 
     for i = 1:(length(et_vec)-1)
+        if i == 345
+            are = 2;
+        end
     
         if any(et_vec == et_vec(i+1))
             [xx_filtered, P_filtered] = UKF([r_start; v_start], [et_vec(i), et_vec(i+1)], measurements, P0, spacecraft_data, sigma_meas, Qk);
@@ -274,3 +278,61 @@ legend([sig, err], '3*sqrt(P_z)', 'norm of error on position component')
 grid on; grid minor;
 title('rz error');
 xlabel('Time [s]'); ylabel('Error [km]');
+
+%% UT
+
+options = odeset('reltol', 1e-12, 'abstol', [ones(3,1)*1e-8; ones(3,1)*1e-11]);
+
+x_mean = [21.095697268161683; -31.527866008753950; -23.491639672861801;  -0.011418159898777;  -0.009247442529600;  0.001997382918943];
+r0 = [8.5855;   44.6428;   -4.4817];
+v0 = [0.0164;   -0.0032;    0.0018];
+x_mean = [r0; v0];
+
+%Initial Covariance
+sigma_pos = 0.01;
+sigma_vel = 0.01*10^(-3);
+P_initial = [eye(3)*sigma_pos^2, zeros(3); zeros(3),  eye(3)*sigma_vel^2];
+
+%Epochs
+et_i = cspice_str2et('2000-08-01 T07:00:00');
+et_f = cspice_str2et('2000-08-01 T12:00:00');
+et_step = 60;
+et_vec = et_i:60:et_f;
+
+et_vec = [et_vec(1), et_vec(end)];
+
+% Semiaxis (in km) of the asteroid model 
+a = 20.591;
+b = 5.711;
+c = 5.332;
+n1 = 40;
+n2 = 20;
+[F, V, N, C20, C22, A] = Ellipsoid(a, b, c, n1, n2);
+
+x_start = x_mean(1:3);
+v_start = x_mean(4:6);
+P_start = P_initial;
+
+sigr = zeros(size(et_vec));
+sigr(1) = sqrt(trace(P_initial(1:3, 1:3)));
+sigv = zeros(size(et_vec));
+sigv(1) = sqrt(trace(P_initial(4:6, 4:6)));
+
+for i = 1:(length(et_vec)-1)
+    [mean_UT_f, P_UT_f] = UT(x_start, v_start, P_start, et_vec(i), et_vec(i+1), C20, C22);
+    x_start = mean_UT_f(1:3);
+    v_start = mean_UT_f(4:6);
+    P_start = P_UT_f;
+
+    sigr(i+1) = sqrt(trace(P_UT_f(1:3, 1:3)));
+    sigv(i+1) = sqrt(trace(P_UT_f(4:6, 4:6)));
+end
+
+figure(1)
+semilogy((et_vec - et_vec(1))/(3600*24), sigr, 'b', 'LineWidth', 1.5)
+grid on
+grid minor
+figure(2)
+semilogy((et_vec - et_vec(1))/(3600*24), sigv, 'b', 'LineWidth', 1.5)
+grid on
+grid minor

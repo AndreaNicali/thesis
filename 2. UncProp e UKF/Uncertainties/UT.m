@@ -24,7 +24,6 @@ for i = 1:size(sp, 2)
     [~, propag] = ode78(@(t,x) dynamicsEllipsoid(t, x, mass_eros, omega_body, C20, C22), [et_i, et_f], sp(:, i), options);
     y(:, i) = propag(end, :)';
 
-
 end
 
 y0 = y(:,1);
