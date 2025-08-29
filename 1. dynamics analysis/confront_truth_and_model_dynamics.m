@@ -136,3 +136,4 @@ grid on
 legend([central, sh, sh2, solradpr ], {'Central body', 'Spherical Armonics up to 15', 'Spherical Armonics Ellipsoid', 'Solar Rad Pressure'});
 xlim([16, 1000])
 
+%%
