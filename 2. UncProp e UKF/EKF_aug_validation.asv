@@ -1,4 +1,4 @@
-2%In this script the validation of UKF is performed. Measurements are taken
+%In this script the validation of UKF is performed. Measurements are taken
 %from the true dynamics (15th order SH) as the line of sight towards 100
 %features randomly distributed around the asteroid. The line of sight is
 %computed as coaltitude and azimuth angle in the feature topocentric frame.
@@ -25,21 +25,26 @@ cspice_furnsh('kernels\erosatt_1998329_2001157_v01.bpc');
 options = odeset('reltol', 1e-12, 'abstol', [ones(3,1)*1e-8; ones(3,1)*1e-11]);
 
 x_mean = [21.095697268161683; -31.527866008753950; -23.491639672861801;  -0.011418159898777;  -0.009247442529600;  0.001997382918943];
+eta0 = zeros(1, 3);
 
 %Initial Covariance
 sigma_pos = 0.5e-1;
 sigma_vel = 0.3*10^(-4);
-P_initial = [eye(3)*sigma_pos^2, zeros(3); zeros(3),  eye(3)*sigma_vel^2];
-n_sample = 1;
+P_initial = zeros(9);
+P_initial(1:3, 1:3) = eye(3)*sigma_pos^2;
+P_initial(4:6, 4:6) = eye(3)*sigma_vel^2;
+P_initial(7:9, 7:9) = eye(3)*(10^-12)^2;
+
+n_sample = 30;
 x_0_vec = zeros(6, n_sample);
 
 for i = 1:size(x_0_vec, 2)
-    x_0_vec(:, i) = mvnrnd(x_mean, P_initial) ;
+    x_0_vec(:, i) = mvnrnd(x_mean, P_initial(1:6, 1:6)) ;
 end
 
 %Epochs
 et_i = cspice_str2et('2000-08-01 T07:00:00');
-et_f = cspice_str2et('2000-08-01 T19:00:00');
+et_f = cspice_str2et('2000-08-02 T07:00:00');
 et_step = 60;
 et_vec = et_i:et_step:et_f;
 
@@ -93,7 +98,7 @@ sigma2 = 100; %90
 sigma_angular = sqrt( (sigma1/3600*pi/180)^2 + (sigma2/3600*pi/180)^2 ) ;
 
 %Process noise
-sigma_acc = 5e-9;
+sigma_acc = 5e-12;
 
 %Integration of truth and model dynamics in the given time interval
 [~ , xx_model] = ode78(@(t,x) dynamicsEllipsoid(t, x, mass_eros, omega_body, C20, C22), et_vec, x_mean, options);
@@ -103,7 +108,7 @@ sigma_meas = sigma_angular;
 
 %Initialize storing vectors
 
-P_tutte = zeros(6,6, length(et_vec));
+P_tutte = zeros(9,9, length(et_vec));
 P_tutte(:, :, 1) = P_initial;
 
 error_r = zeros(size(x_0_vec, 2), length(et_vec)); 
@@ -121,12 +126,14 @@ sigma_z_vec = zeros(size(x_0_vec, 2), length(et_vec));
 
 h = waitbar(0, 'Propagating Uncertainties...'); 
 
+
 for j = 1:size(x_0_vec, 2)
     
     x_0 = x_0_vec(:, j);
 
     r_start = x_0_vec(1:3, j)';
     v_start = x_0_vec(4:6, j)';
+    eta_start = eta0;
     xx(1, :) = x_0_vec(1:6, j);
     P0 = P_initial;
 
@@ -147,7 +154,7 @@ for j = 1:size(x_0_vec, 2)
     end
     measurements.val = pert_meas;
 
-    [xx_filtered, P_filtered, flag] = EKF([r_start, v_start], eval_times, measurements, P0, spacecraft_data, sigma_meas, sigma_acc, xx_true);
+    [xx_filtered, P_filtered, flag] = EKF_augmented([r_start, v_start], eta_start, eval_times, measurements, P0, spacecraft_data, sigma_meas, sigma_acc, xx_true);
     
     error_r(j, :) = vecnorm(xx_filtered(:, 1:3)-xx_true(:, 1:3), 2, 2);
     error_v(j, :) = vecnorm(xx_filtered(:, 4:6)-xx_true(:, 4:6), 2, 2);
@@ -168,7 +175,7 @@ for j = 1:size(x_0_vec, 2)
 end
 close(h);
 
-figure(6)
+figure(1)
 hold on
 grid on
 grid minor
@@ -178,7 +185,7 @@ for i = 1:size(x_0_vec, 2)
     plot(et_vec, error_r(i, :), 'b', 'LineWidth', 1)
 end
     
-figure(7)
+figure(2)
 hold on
 grid on
 grid minor
@@ -188,7 +195,7 @@ for i = 1:size(x_0_vec, 2)
     plot(et_vec, error_v(i, :), 'b', 'LineWidth', 1)
 end
 
-figure(8)
+figure(3)
 hold on
 grid on
 grid minor
@@ -198,7 +205,7 @@ for i = 1:size(x_0_vec, 2)
     plot(et_vec, error_x(i, :), 'b', 'LineWidth', 1)
 end
 
-figure(9)
+figure(4)
 hold on
 grid on
 grid minor
@@ -208,7 +215,7 @@ for i = 1:size(x_0_vec, 2)
     plot(et_vec, error_y(i, :), 'b', 'LineWidth', 1)
 end
 
-figure(10)
+figure(5)
 hold on
 grid on
 grid minor
@@ -217,3 +224,4 @@ for i = 1:size(x_0_vec, 2)
     plot(et_vec, -sigma_z_vec(i, :), 'g', 'LineWidth', 1.5)
     plot(et_vec, error_z(i, :), 'b', 'LineWidth', 1)
 end
+

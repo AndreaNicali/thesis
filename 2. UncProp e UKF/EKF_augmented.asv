@@ -1,4 +1,4 @@
-function [xx_filtered, P_filtered, flag] = EKF(x0, tt, measurements, P0, spacecraft_data, sigma_meas, sigma_acc, xx_truth)
+function [xx_filtered, P_filtered, flag] = EKF_augmented(x0, eta0, tt, measurements, P0, spacecraft_data, sigma_meas, sigma_acc, xx_truth)
 
 C20 = spacecraft_data.data_asteroids.C20;
 C22 = spacecraft_data.data_asteroids.C22;
@@ -12,33 +12,30 @@ P_filtered = zeros(6, 6, length(tt));
 xx_filtered(1, :) = x0;
 P_filtered(:, :, 1) = P0;
 
-x_start = x0;
+x_start = [x0, eta0];
 P_start = P0;
 flag = [];
 
 for i = 1:(length(tt)-1)
-    tao = tt(i+1)-tt(i);
-    q11 = (1/3)*tao^4;
-    q12 = (1/2)*tao^3;
-    q22 = tao^2;
-    
-    % q11 = (1/3)*tao^3;
-    % q12 = (1/2)*tao^2;
-    % q22 = tao;
-
-    Qk = sigma_acc^2 * [ ...
-    q11, 0,   0,   q12, 0,   0;
-    0,   q11, 0,   0,   q12, 0;
-    0,   0,   q11, 0,   0,   q12;
-    q12, 0,   0,   q22, 0,   0;
-    0,   q12, 0,   0,   q22, 0;
-    0,   0,   q12, 0,   0,   q22];
-
+    % tao = tt(i+1)-tt(i);
+    % q11 = (1/4)*tao^4;
+    % q12 = (1/2)*tao^3;
+    % q22 = tao^2;
+    % 
+    % 
+    % Qk = sigma_acc^2 * [ ...
+    % q11, 0,   0,   q12, 0,   0;
+    % 0,   q11, 0,   0,   q12, 0;
+    % 0,   0,   q11, 0,   0,   q12;
+    % q12, 0,   0,   q22, 0,   0;
+    % 0,   q12, 0,   0,   q22, 0;
+    % 0,   0,   q12, 0,   0,   q22];
+    tao = 24*3600;
     
     meas_t = measurements.time == tt(i+1);
     meas = measurements.val(:, meas_t);
 
-    [~, xx, PHI]  = propagateEllipsoid(x_start', [tt(i), tt(i+1)], mass_eros, omega_body, C20, C22);
+    [~, xx, PHI]  = propagateEllipsoidEKF(x_start', [tt(i), tt(i+1)], mass_eros, omega_body, C20, C22, tao);
     
     % delta = [x_start(1)*10^-8, x_start(2)*10^-8, x_start(3)*10^-8, 10^-8, 10^-8, 10^-8];
     % eps_pert = diag(delta);
@@ -70,6 +67,9 @@ for i = 1:(length(tt)-1)
         sim_meas_t(ia) = true;
 
     end
+    Qk = zeros(9);
+    Qk(4:6, 4:6) = eye(3)*sigma_acc^2/2*tao;
+    Qk(7:9, 7:9) = eye(3)*sigma_acc^2;e
 
     sim_meas = sim_meas(:);
     meas = meas(:);
@@ -113,7 +113,7 @@ end
 function [H, R] = measurementsMatrix(los_meas, sigma_meas)
 
 N = size(los_meas, 2);   % numero di misure
-H = zeros(2*N, 6);
+H = zeros(2*N, 9);
 
 for i = 1:N
     rho = norm(los_meas(:, i));

@@ -10,7 +10,7 @@ x0Phi0 = [x0; Phi0(:)];
 
 % Perform integration
 options = odeset('reltol', 1e-11, 'abstol', 1e-11);
-[tt , xx] = ode78(@(t,x) dynamicsEllipsoidEKF(t, x, mass, omega, C20, C22, tao, Q), et_vec, x0Phi0, options);
+[tt , xx] = ode78(@(t,x) dynamicsEllipsoidEKF(t, x, mass, omega, C20, C22, tao), et_vec, x0Phi0, options);
 
 % Extract state vector and State Transition Matrix
 
