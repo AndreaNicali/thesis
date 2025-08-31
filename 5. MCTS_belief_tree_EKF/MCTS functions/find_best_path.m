@@ -1,6 +1,6 @@
 function [best_path, best_actions, best_final_times] = find_best_path(tree)
 
-    % Mappa ID → indice nella cella
+    % Mappa ID
     id_to_index = containers.Map('KeyType', 'double', 'ValueType', 'double');
     for i = 1:length(tree)
         id_to_index(tree{i}.id) = i;

@@ -8,7 +8,7 @@ v = y(4:6);
 rnorm = norm(r);
 G = astroConstants(1);
 
-% Add spherical armonics and solar radiation pressure
+% Add spherical armonics
 acc_shp = rhs_true(y, mass, 15);
 
 % Set the derivatives of the state

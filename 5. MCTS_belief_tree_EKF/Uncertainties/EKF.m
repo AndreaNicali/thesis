@@ -120,11 +120,10 @@ for i = 1:N
     J = [ 1/sqrt(1-rhoz^2)*rhox*rhoz/rho,   1/sqrt(1-rhoz^2)*rhoy*rhoz/rho,  1/sqrt(1-rhoz^2)*(-1+rhoz^2)/rho; 
         1/(1+(rhoy/rhox)^2)*rhoy/(rhox^2*rho),  -1/(1+(rhoy/rhox)^2)*1/(rhox*rho),  0 ];
     
-    % Inserisco nel blocco 2x6 (velocità non influiscono)
     H(2*(i-1)+1 : 2*i, 1:3) = J;
 end
 
-% Covarianza misure (assunte indipendenti e identiche)
+% Covarianza misure
 R = sigma_meas^2 * eye(2*N);
 
 end

@@ -1,8 +1,10 @@
 function [P_filtered, xx_filtered, flag] = navigationFilter(y0, y_truth, P0, tt, spacecraft_data)
+%Flag is 0 if the navigation hasn't been performed at that instant, 1 if it
+%has
 
 sigma_acc = 5e-9;
 
-sigma_meas = sqrt( (100/3600*pi/180)^2 + (100/3600*pi/180)^2 ) ;
+sigma_meas = sqrt( (100/3600*pi/180)^2 + (100/3600*pi/180)^2 ) ; % 
 
 [measurements] = measurementsFun(y_truth, tt, spacecraft_data);
 
@@ -19,6 +21,6 @@ measurements.val = pert_meas;
 y_truth = reshape(y_truth, [length(tt), 6]);
 
 [xx_filtered, P_filtered, flag] = EKF(y0, tt, measurements, P0, spacecraft_data, sigma_meas, sigma_acc, y_truth);
-flag = [0, flag];
+flag = [0, flag]; 
 
 end

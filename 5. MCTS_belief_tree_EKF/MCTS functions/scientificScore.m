@@ -81,13 +81,13 @@ for i = 1:n_time
                         if in_range
                             inc = dot(r_sun, normal_j) / (norm(r_sun) * norm(normal_j));
                             if inc > 0
-                                % === CHECK FOV COMMENTATO ===
-                                % inside1 = check_FOV(V(F(j, 1), :), r_now, fov1, fov2, R_cam);
-                                % if inside1
-                                %     inside2 = check_FOV(V(F(j, 2), :), r_now, fov1, fov2, R_cam);
-                                %     if inside2
-                                %         inside3 = check_FOV(V(F(j, 3), :), r_now, fov1, fov2, R_cam);
-                                %         if inside3
+                                % === CHECK FOV ===
+                                inside1 = check_FOV(V(F(j, 1), :), r_now, fov1, fov2, R_cam);
+                                if inside1
+                                    inside2 = check_FOV(V(F(j, 2), :), r_now, fov1, fov2, R_cam);
+                                    if inside2
+                                        inside3 = check_FOV(V(F(j, 3), :), r_now, fov1, fov2, R_cam);
+                                        if inside3
                                             if isnan(new_scores(j).actual_range(k)) || abs(norm_rrel-new_scores(j).ideal_range) < abs(new_scores(j).actual_range(k)-new_scores(j).ideal_range)
                                                 new_scores(j).actual_range(k) = norm_rrel;
                                                 space = 2;
@@ -101,9 +101,9 @@ for i = 1:n_time
                                                     end
                                                 end
                                             end
-                                %         end
-                                %     end
-                                % end
+                                        end
+                                    end
+                                end
                             end
                         end
                     elseif is_relative
@@ -115,13 +115,13 @@ for i = 1:n_time
                             inc = dot(r_sun, normal_j) / (norm(r_sun) * norm(normal_j));
 
                             if emission_dot > 0 && inc > 0
-                                % === CHECK FOV COMMENTATO ===
-                                % inside1 = check_FOV(V(F(j, 1), :), r_now, fov1, fov2, R_cam);
-                                % if inside1
-                                %     inside2 = check_FOV(V(F(j, 2), :), r_now, fov1, fov2, R_cam);
-                                %     if inside2
-                                %         inside3 = check_FOV(V(F(j, 3), :), r_now, fov1, fov2, R_cam);
-                                %         if inside3
+                                %=== CHECK FOV  ===
+                                inside1 = check_FOV(V(F(j, 1), :), r_now, fov1, fov2, R_cam);
+                                if inside1
+                                    inside2 = check_FOV(V(F(j, 2), :), r_now, fov1, fov2, R_cam);
+                                    if inside2
+                                        inside3 = check_FOV(V(F(j, 3), :), r_now, fov1, fov2, R_cam);
+                                        if inside3
                                             if isnan(new_scores(j).actual_range(k)) || abs(norm_rrel-new_scores(j).ideal_range) < abs(new_scores(j).actual_range(k)-new_scores(j).ideal_range)
                                                 new_scores(j).actual_range(k) = norm_rrel;
                                                 space = 2;
@@ -135,9 +135,9 @@ for i = 1:n_time
                                                     end
                                                 end
                                             end
-                                %         end
-                                %     end
-                                % end
+                                        end
+                                    end
+                                end
                             end
                         end
                     end

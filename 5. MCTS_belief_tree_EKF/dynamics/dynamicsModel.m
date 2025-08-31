@@ -8,7 +8,7 @@ v = y(4:6);
 rnorm = norm(r);
 G = astroConstants(1);
 
-%Compute model spherical armonic perturbation and solar radiation pressure
+%Compute model spherical armonic perturbation
 acc_shp = rhs_model(y, mass, C20, C22);
 
 % Set the derivatives of the state
