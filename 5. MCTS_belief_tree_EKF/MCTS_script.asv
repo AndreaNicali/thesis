@@ -35,6 +35,7 @@ mass_eros = 6.687e15; %kg
 a = 20.591;
 b = 5.711;
 c = 5.332;
+
 %Discretization
 n1 = 30;
 n2 = 20;
@@ -44,10 +45,11 @@ centres = [120, 965];
 vals = [1, 2];
 
 % Asteroid model generation
-[F, V, N, C20, C22, A, score] = EllipsoidGeneration(a, b, c, n1, n2, centres, vals);
+[F, V, N, C20, C22, A, score] = EllipsoidGeneration(a, b, c, M, centres, vals);
+plotEllipsoidWithKnownRegion(F,V,score,ones(size(F, 1), 1));
 
 %Set initial asteroid knowledge
-face_centroids = (V(F(:,1), :) + V(F(:,2), :) + V(F(:,3), :)) / 3;
+% face_centroids = (V(F(:,1), :) + V(F(:,2), :) + V(F(:,3), :)) / 3;
 % known_map = double( ...
 %     face_centroids(:,1) > 0 & ...
 %     face_centroids(:,2) > 0 & ...
@@ -93,7 +95,7 @@ truth_dyn = @(t, x) dynamicsTrue(t, x, mass_eros, omega_body);
 
 %% RUN MCTS
 
-iterations = 100; %Number of iterations per tree (As a reference, for 200 iterations 45 min/1 h are required)
+iterations = 50; %Number of iterations per tree (As a reference, for 200 iterations 45 min/1 h are required)
 n_trees = 4; %Number of trees
 
 %Set up initial condition for the alterning of planning / coasting phases
@@ -135,7 +137,7 @@ for i = 1:n_trees
     flags = [];
     y0 = [plan_r_start', plan_v_start'];
 
-    %Compute the estimated trajectory
+    %Compute the estimated trajectory 
     for j = 1:length(TT_real_cells)
         y0 = y0 + [zeros(1,3), best_actions(:, j)'];
         [P_filtered_parz, XX_filter_parz, flag] = navigationFilter(y0, XX_real_cells{j}, cov_div, TT_real_cells{j}, spacecraft_data_new);
@@ -161,13 +163,15 @@ for i = 1:n_trees
         y0 = XX_filter(end, :);
     end
     
-    
+    %Perform the real update of the score and asteroid knowledge
     [J_of_t, dJdt, new_scores_real, new_known_map_real, mapping_score_t, exploit_score_t, nav_score_t] = total_score(XX_filter, TT_real, P0, spacecraft_data_new);
     
     spacecraft_data_new.data_asteroids.features.known_map_features = new_known_map_real;
     spacecraft_data_new.data_asteroids.mapping.known_map = new_known_map_real;
     spacecraft_data_new.data_asteroids.features.score = new_scores_real;
-
+    
+    %Add and update scores vector and trajectories for the plot as well as
+    %new conditions for the next iteration
     if i == 1
         total_mapping_score = [total_mapping_score; mapping_score_t];
         total_exploiting_score = [total_exploiting_score; exploit_score_t];

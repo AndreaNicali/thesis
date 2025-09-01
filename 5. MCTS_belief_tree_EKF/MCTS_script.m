@@ -35,17 +35,14 @@ mass_eros = 6.687e15; %kg
 a = 20.591;
 b = 5.711;
 c = 5.332;
-
-%Discretization
-n1 = 30;
-n2 = 20;
+M = 1000;
 
 % Features positioning and values
 centres = [120, 965];
 vals = [1, 2];
 
 % Asteroid model generation
-[F, V, N, C20, C22, A, score] = EllipsoidGeneration(a, b, c, n1, n2, centres, vals);
+[F, V, N, C20, C22, A, score] = EllipsoidGenerationFib(a, b, c, M, centres, vals);
 
 %Set initial asteroid knowledge
 % face_centroids = (V(F(:,1), :) + V(F(:,2), :) + V(F(:,3), :)) / 3;
@@ -55,9 +52,13 @@ vals = [1, 2];
 %     face_centroids(:,3) > 0 );
 
 known_map = zeros(size(F, 1), 1);
-
 %Features for navigation
 nav_index = round(linspace(1, length(known_map), 300));
+
+figure()
+plotEllipsoidWithKnownRegion(F,V,score,ones(size(F, 1), 1));
+figure()
+plotEllipsoidWithFeatures(F, V, ones(size(F, 1), 1), nav_index);
 
 %Set up data for reachability
 spacecraft_data = struct();
