@@ -136,9 +136,7 @@ end
 function [tree] = ComputeActions(tree, id_parent)
 %This function compute the reachabilty set from a belief node. It is done
 %on one belief node and it assign the same action list to all the belief
-%nodes "brothers" of the original one, (i.e. all the belief nodes that have
-%the same parent of the first).
-
+%node "brothers" of the original one, (i.e.
     %Start reachability
     [~,~,~,U,J_val,T,~,I] = exploreU(tree{id_parent}.state, tree{id_parent}.cov, tree{id_parent}.time, tree{id_parent}.data);
     tree{id_parent}.actions = [U(:, I==1); J_val(I==1)'; T(I==1)'];
@@ -158,10 +156,7 @@ function [tree] = ComputeActions(tree, id_parent)
 end
 
 function [action, tf, parent_node] = SelectAction(parent_node, node_ids)
-%This function selects the best action to add to the tree from the
-%reachable set of a belief node. It works in a "best first" way: it selects
-%the action with the best score that has not been added yet.
-
+    
     untried_not_found = 1;
     ind = 1;
     
@@ -191,8 +186,7 @@ function [action, tf, parent_node] = SelectAction(parent_node, node_ids)
 end
 
 function [child_node, action_node] = PropagateFromActionNode(parent_node, action_node, node_ids, main)
-%This function propagate an action node and generates a new belief node.
-
+    
     mass_eros = parent_node.data.data_asteroids.mass;
     omega_body = parent_node.data.data_asteroids.omega;
     C20 = parent_node.data.data_asteroids.C20;

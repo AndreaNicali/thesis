@@ -10,7 +10,6 @@ while flag
     
     if parent_id == 0 %If the root has been reached
         return
-
     end
     %Otherwise keep updating parent node
     tree{parent_id}.score = tree{parent_id}.score + gamma*adding_score;

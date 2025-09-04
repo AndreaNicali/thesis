@@ -22,9 +22,15 @@ t0 = cspice_str2et('2000-08-01 T01:00:00');
 
 r0 = [8.5855;   44.6428;   -4.4817]; %km
 v0 = [0.0164;   -0.0032;    0.0018]; %km/s
+eta0 = zeros(1, 3);
+
 sigma_pos = 0.01; %km
 sigma_vel = 0.01*10^-3; %km/s
-P0 = [eye(3)*sigma_pos^2, zeros(3); zeros(3),  eye(3)*sigma_vel^2];
+%P0 = [eye(3)*sigma_pos^2, zeros(3); zeros(3),  eye(3)*sigma_vel^2];
+P0 = zeros(9);
+P0(1:3, 1:3) = eye(3)*sigma_pos^2;
+P0(4:6, 4:6) = eye(3)*sigma_vel^2;
+P0(7:9, 7:9) = eye(3)*(10^-12)^2;
 
 %Data for body frame propagation
 T_rotation_eros = 5.27025547*3600; %s
@@ -35,30 +41,31 @@ mass_eros = 6.687e15; %kg
 a = 20.591;
 b = 5.711;
 c = 5.332;
-
-%Discretization
-n1 = 30;
-n2 = 20;
+M = 1000;
 
 % Features positioning and values
 centres = [120, 965];
 vals = [1, 2];
 
 % Asteroid model generation
-[F, V, N, C20, C22, A, score] = EllipsoidGeneration(a, b, c, M, centres, vals);
-plotEllipsoidWithKnownRegion(F,V,score,ones(size(F, 1), 1));
+[F, V, N, C20, C22, A, score] = EllipsoidGenerationFib(a, b, c, M, centres, vals);
 
 %Set initial asteroid knowledge
-% face_centroids = (V(F(:,1), :) + V(F(:,2), :) + V(F(:,3), :)) / 3;
-% known_map = double( ...
-%     face_centroids(:,1) > 0 & ...
-%     face_centroids(:,2) > 0 & ...
-%     face_centroids(:,3) > 0 );
+face_centroids = (V(F(:,1), :) + V(F(:,2), :) + V(F(:,3), :)) / 3;
+known_map = double( ...
+    face_centroids(:,1) > 0 & ...
+    face_centroids(:,2) > 0 & ...
+    face_centroids(:,3) > 0 );
 
-known_map = zeros(size(F, 1), 1);
+%known_map = zeros(size(F, 1), 1);
 
 %Features for navigation
 nav_index = round(linspace(1, length(known_map), 300));
+
+% figure()
+% plotEllipsoidWithKnownRegion(F,V,score,ones(size(F, 1), 1));
+% figure()
+% plotEllipsoidWithFeatures(F, V, ones(size(F, 1), 1), nav_index);
 
 %Set up data for reachability
 spacecraft_data = struct();
@@ -74,7 +81,13 @@ spacecraft_data.data_guidance.scientificFov1 = 8*pi/180;
 spacecraft_data.data_guidance.scientificFov2 = 8*pi/180;
 spacecraft_data.data_guidance.navigationFov1 = 15*pi/180;
 spacecraft_data.data_guidance.navigationFov2 = 15*pi/180;
-spacecraft_data.data_guidance.alpha = [0.2; 0.2; 0.6]; %[mapping; exploitation; navigation]
+spacecraft_data.data_guidance.alpha = [1/3; 1/3; 1/3]; %[mapping; exploitation; navigation]
+spacecraft_data.data_guidance.eta0 = eta0;
+spacecraft_data.data_guidance.sigma_magn = 0.05/3;
+spacecraft_data.data_guidance.sigma_align = 2/3*pi/180;
+
+sigma_magn = 0.05/3;
+sigma_align = 2/3*pi/180;
 
 spacecraft_data.data_asteroids.Faces = F;
 spacecraft_data.data_asteroids.Vertexes = V;
@@ -95,8 +108,7 @@ truth_dyn = @(t, x) dynamicsTrue(t, x, mass_eros, omega_body);
 
 %% RUN MCTS
 
-iterations = 50; %Number of iterations per tree (As a reference, for 200 iterations 45 min/1 h are required)
-n_trees = 4; %Number of trees
+iterations = 30; %Number of iterations
 
 %Set up initial condition for the alterning of planning / coasting phases
 spacecraft_data_new = spacecraft_data;
@@ -104,6 +116,7 @@ real_r_start = r0;
 real_v_start = v0;
 plan_r_start = r0;
 plan_v_start = v0;
+eta_start = eta0;
 t_start = t0;
 P_start = P0;
 
@@ -121,26 +134,27 @@ total_nav_score = [];
 action_times = [];
 
 alpha = spacecraft_data.data_guidance.alpha;
-for i = 1:n_trees
+for i = 1:iterations
     %Compute tree search and extract the best path
-    tree = MctsBeliefBased([plan_r_start; plan_v_start], P_start, t_start,  iterations, spacecraft_data_new, initial_tree);
-    [best_path, best_actions, best_final_times] = find_best_path(tree);
-    
+    [uu_opt,th_opt,J_opt,U,J,T,S,I] = exploreU([plan_r_start; plan_v_start] , P_start, t_start, spacecraft_data_new);
+    [uu_real, P_man] = pertThrust(uu_opt, sigma_magn, sigma_align);
+
+    [TT_real_cells, XX_real_cells] = compute_trajectory([real_r_start; real_v_start], [t_start, th_opt], uu_real, truth_dyn, options);    
     %Compute the real trajectory
-    [TT_real_cells, XX_real_cells] = compute_trajectory([real_r_start; real_v_start], best_final_times, best_actions, truth_dyn, options);
     
     XX_real = [];
     XX_filter = [];
     P_filtered = [];
     TT_real = [];
-    cov_div = tree{1}.cov;
+    cov_div = P_start;
     flags = [];
     y0 = [plan_r_start', plan_v_start'];
 
     %Compute the estimated trajectory 
     for j = 1:length(TT_real_cells)
-        y0 = y0 + [zeros(1,3), best_actions(:, j)'];
-        [P_filtered_parz, XX_filter_parz, flag] = navigationFilter(y0, XX_real_cells{j}, cov_div, TT_real_cells{j}, spacecraft_data_new);
+        y0 = y0 + [zeros(1,3), uu_opt'];
+        cov_div(4:6, 4:6) = cov_div(4:6, 4:6) + P_man;  
+        [P_filtered_parz, XX_filter_parz, eta_f, flag] = navigationFilter(y0, XX_real_cells{j}, cov_div, TT_real_cells{j}, spacecraft_data_new);
         add_x = XX_real_cells{j};
         add_t = TT_real_cells{j};
 
@@ -161,14 +175,17 @@ for i = 1:n_trees
         end
         cov_div = P_filtered(:, :, end);
         y0 = XX_filter(end, :);
+        spacecraft_data_new.data_guidance.eta0 = eta_f;
     end
-    
+
+    P_start(4:6,4:6) = P_start(4:6, 4:6) + P_man;
     %Perform the real update of the score and asteroid knowledge
-    [J_of_t, dJdt, new_scores_real, new_known_map_real, mapping_score_t, exploit_score_t, nav_score_t] = total_score(XX_filter, TT_real, P0, spacecraft_data_new);
+    [J_of_t, dJdt, new_scores_real, new_known_map_real, mapping_score_t, exploit_score_t, nav_score_t] = total_score(XX_filter, TT_real, P_start, spacecraft_data_new);
     
     spacecraft_data_new.data_asteroids.features.known_map_features = new_known_map_real;
     spacecraft_data_new.data_asteroids.mapping.known_map = new_known_map_real;
     spacecraft_data_new.data_asteroids.features.score = new_scores_real;
+    spacecraft_data_new.data_guidance.eta0 = eta_f;
     
     %Add and update scores vector and trajectories for the plot as well as
     %new conditions for the next iteration
@@ -182,7 +199,7 @@ for i = 1:n_trees
         total_nav_score = [total_nav_score; nav_score_t(2:end)];
     end
 
-    P_start = reshape(P_filtered(:, :, end), 6, 6);
+    P_start = reshape(P_filtered(:, :, end), 9, 9);
     t_start = TT_real(end);
 
     real_trajectory = [real_trajectory; XX_real(2:end, :)];
@@ -193,13 +210,12 @@ for i = 1:n_trees
 
     real_r_start = XX_real(end, 1:3)';
     real_v_start = XX_real(end, 4:6)';
-
+    
     plan_r_start = XX_filter(end, 1:3)';
     plan_v_start = XX_filter(end, 4:6)';
 
-    action_times = [action_times, best_final_times];
-
-    all_trees{i} = tree;
+    action_times = [action_times, th_opt];
+    
 
 end
 
@@ -303,4 +319,29 @@ xlabel('X [km]')
 zlabel('Z [km]')
 ylabel('Y [km]')
 legend(man, 'Manoeuvring Point')
+
+%Plot det P adimensionalized
+figure(6)
+DU = 40;
+TU = sqrt( DU^3/(astroConstants(1)*spacecraft_data.data_asteroids.mass) );
+VU = DU/TU + omega_body(3)*DU;
+
+dets = zeros(size(P_all, 3), 1);
+for i = 1:size(P_all, 3)
+    P_adim = zeros(size(P0(1:6, 1:6)));
+    P_adim(1:3, 1:3) = P_all(1:3, 1:3, i)/(DU*DU);
+    P_adim(4:6, 1:3) = P_all(4:6, 1:3, i)/(DU*VU);
+    P_adim(1:3, 4:6) = P_all(1:3, 4:6, i)/(DU*VU);
+    P_adim(4:6, 4:6) = P_all(4:6, 4:6, i)/(VU*VU);
+    dets(i) = log10(det(P_adim));
+end
+semilogy(( tt_all(1:end)-tt_all(1) )/3600, dets, 'g', 'LineWidth',1.5)
+hold on
+for i = 1:length(action_times)
+    act = xline( (action_times(i)-tt_all(1) )/3600, 'k--', 'LineWidth', 1);
+end
+grid on
+grid minor
+xlabel('Time [h]')
+ylabel('log10det [-]')
 

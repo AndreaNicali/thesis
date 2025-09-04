@@ -30,8 +30,14 @@ xx0_1 = xx0+[zeros(3,1);uu0_1];
 % Score function
 spacecraft_data.data_guidance.r_impact = spacecraft_data.data_guidance.r_impact+2;
 spacecraft_data.data_guidance.r_escape = spacecraft_data.data_guidance.r_escape-10;
+sigma_magn = spacecraft_data.data_guidance.sigma_magn;
+sigma_align = spacecraft_data.data_guidance.sigma_align;
 
-[J_hist, dJ_dt_hist] = total_score(xx, tt, P0, spacecraft_data); % Can be any user defined function
+[~, P_man] = pertThrust(uu0_1, sigma_magn, sigma_align);
+P_adj = P0;
+P_adj(4:6, 4:6) = P0(4:6, 4:6) + P_man;
+
+[J_hist, dJ_dt_hist] = total_score(xx, tt, P_adj, spacecraft_data); % Can be any user defined function
 
 % Process the flow to compute the next maneuvering point
 % Note that flow_processing uses the derivatives of the score
@@ -48,9 +54,12 @@ for k = 2:size(U0,2)
     uu0_k = U0(:,k);
     xx0_k = xx0+[zeros(3,1);uu0_k];
     [xx_k,tt_k] = integrate_ode_reachability(xx0_k,t0,tf,tstep); % Propagate sample
-
+    
+    [~, P_man] = pertThrust(uu0_k, sigma_magn, sigma_align);
+    P_adj = P0;
+    P_adj(4:6, 4:6) = P0(4:6, 4:6) + P_man;
     % Score function
-    [J_hist, dJ_dt_hist] = total_score(xx_k, tt_k, P0, spacecraft_data); % Can be any user defined function
+    [J_hist, dJ_dt_hist] = total_score(xx_k, tt_k, P_adj, spacecraft_data); % Can be any user defined function
 
     % Process the flow to compute the next maneuvering point
     % Note that flow_processing uses the derivatives of the score
