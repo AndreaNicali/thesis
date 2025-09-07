@@ -116,6 +116,15 @@ profile on
     runMCTSBatch(spacecraft_data, r0, v0, t0, P0, iterations, n_trees, truth_dyn, options);
 profile off
 profile viewer
+
+%% GREEDY
+n_actions = 4;
+n_set = 3;
+[real_trajectory, filter_trajectory, P_all, tt_all, ...
+          total_mapping_score, total_exploiting_score, total_nav_score, ...
+          action_times, all_flag, spacecraft_data_out] = ...
+    greedyApproach(spacecraft_data, r0, v0, t0, P0, n_actions, n_set, model_dyn, truth_dyn, options);
+
 %% Plots
 %Plot errori posizione
 final_scores = spacecraft_data_out.data_asteroids.features.score;

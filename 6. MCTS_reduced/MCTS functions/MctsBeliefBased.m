@@ -230,7 +230,7 @@ function [child_node, action_node] = PropagateFromActionNode(parent_node, action
     [P_filtered, xx_filt, eta_f] = navigationFilter(state', xx, P, tt, parent_data);
     Pf = P_filtered(:, :, end);
 
-    [J_of_t, ~, new_scores, new_known_map] = total_score(xx_filt, tt, Pf, parent_data);
+    [J_of_t, ~, new_scores, new_known_map] = total_score(xx_filt, tt, P, parent_data);
     
     %Put updated features and map data in the child node data
     child_data = parent_data;
