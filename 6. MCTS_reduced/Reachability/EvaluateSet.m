@@ -13,7 +13,7 @@ function [J,T,S] = EvaluateSet(t0,xx0,P0, U0,spacecraft_data)
 
 
 data_guidance = spacecraft_data.data_guidance;
-
+dynamics = spacecraft_data.data_guidance.modelDynamics;
 
 % Initialize score
 J = zeros(size(U0,2),1);
@@ -25,11 +25,9 @@ tf = t0+data_guidance.Th_max;
 tstep = 100;
 uu0_1 = U0(:,1);
 xx0_1 = xx0+[zeros(3,1);uu0_1];
-[xx,tt] = integrate_ode_reachability(xx0_1,t0,tf,tstep);
+[xx,tt] = integrate_ode_reachability(xx0_1,t0,tf,tstep, dynamics);
 
 % Score function
-spacecraft_data.data_guidance.r_impact = spacecraft_data.data_guidance.r_impact+2;
-spacecraft_data.data_guidance.r_escape = spacecraft_data.data_guidance.r_escape-10;
 sigma_magn = spacecraft_data.data_guidance.sigma_magn;
 sigma_align = spacecraft_data.data_guidance.sigma_align;
 
@@ -53,7 +51,7 @@ S(1) = s; % Safety margin
 for k = 2:size(U0,2)
     uu0_k = U0(:,k);
     xx0_k = xx0+[zeros(3,1);uu0_k];
-    [xx_k,tt_k] = integrate_ode_reachability(xx0_k,t0,tf,tstep); % Propagate sample
+    [xx_k,tt_k] = integrate_ode_reachability(xx0_k,t0,tf,tstep,dynamics); % Propagate sample
     
     [~, P_man] = pertThrust(uu0_k, sigma_magn, sigma_align);
     P_adj = P0;

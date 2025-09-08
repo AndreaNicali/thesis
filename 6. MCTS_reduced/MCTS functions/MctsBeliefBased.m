@@ -7,11 +7,6 @@ function tree = MctsBeliefBased(x0, P0, t, max_iterations, spacecraft_data, init
 %all observation nodes to reduce computational effort
 
 %Set options and extract some needed data
-% options = odeset('reltol', 1e-12, 'abstol', [ones(3,1)*1e-8; ones(3,1)*1e-11]);
-% mass_eros = spacecraft_data.data_asteroids.mass;
-% omega_body = spacecraft_data.data_asteroids.omega;
-% C20 = spacecraft_data.data_asteroids.C20;
-% C22 = spacecraft_data.data_asteroids.C22;
 
 if isempty(initial_tree)
     % Root
@@ -22,14 +17,14 @@ end
 
 %Set MCTS parameters
 node_ids = length(tree)+1;
-gamma = 1; %discount factor
+gamma = spacecraft_data.data_guidance.gamma; %discount factor
 iter = 0;
-ka = 3; % Progressive widening coeff for action nodes
-alpha_a = 0.1; % Progressive widening exp for action nodes
-c = sqrt(2)/(3); % Exploration Constant
+ka = spacecraft_data.data_guidance.ka; % Progressive widening coeff for action nodes
+alpha_a = spacecraft_data.data_guidance.alpha_a; % Progressive widening exp for action nodes
+c = spacecraft_data.data_guidance.expl_const; % Exploration Constant
 
-ko = 3; % Progressive widening coeff for belief nodes
-alpha_o = 0.1; % Progressive widening exp for belief nodes
+ko = spacecraft_data.data_guidance.ko; % Progressive widening coeff for belief nodes
+alpha_o = spacecraft_data.data_guidance.alpha_o; % Progressive widening exp for belief nodes
 
 %if known map is empty, perform only one iteration of planning
 if ~any(spacecraft_data.data_asteroids.features.known_map_features == 1)
@@ -196,12 +191,10 @@ end
 function [child_node, action_node] = PropagateFromActionNode(parent_node, action_node, node_ids, main)
 %This function propagate an action node and generates a new belief node.
 
-    mass_eros = parent_node.data.data_asteroids.mass;
-    omega_body = parent_node.data.data_asteroids.omega;
-    C20 = parent_node.data.data_asteroids.C20;
-    C22 = parent_node.data.data_asteroids.C22;
     sigma_magn = parent_node.data.data_guidance.sigma_magn;
     sigma_align = parent_node.data.data_guidance.sigma_align;
+    dynamics = parent_node.data.data_guidance.modelDynamics;
+
     options = odeset('reltol', 1e-12, 'abstol', [ones(3,1)*1e-8; ones(3,1)*1e-11]);
     parent_data = parent_node.data;
     
@@ -224,7 +217,7 @@ function [child_node, action_node] = PropagateFromActionNode(parent_node, action
     P(4:6, 4:6) = P(4:6, 4:6) + P_man;
 
     %Propagate trajectory
-    [tt, xx] = ode78(@(t,x) dynamicsModel(t, x, mass_eros, omega_body, C20, C22), t0:100:tf, state, options);
+    [tt, xx] = ode78(@(t,x) dynamics(t,x), t0:100:tf, state, options);
     
     %Propagate Uncertainties
     [P_filtered, xx_filt, eta_f] = navigationFilter(state', xx, P, tt, parent_data);
@@ -300,7 +293,6 @@ function node = createBeliefNode(id, state, P, parent_id, depth, t, spacecraft_d
 
 end
 
-
 function tree = backpropagation(tree, child_node, gamma)
 
 %Perform backpropagation after an iteration is completed
@@ -323,8 +315,6 @@ while flag
 end
 
 end
-
-
 
 function [id_node, UCB_score] = nodeSelection(tree, id_parent, c)
 

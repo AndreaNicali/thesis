@@ -3,6 +3,9 @@ function [xx_filtered, P_filtered, flag] = EKF_augmented(x0, eta0, tt, measureme
 C20 = spacecraft_data.data_asteroids.C20;
 C22 = spacecraft_data.data_asteroids.C22;
 
+tao = spacecraft_data.data_guidance.tao;
+tau = spacecraft_data.data_guidance.tao;
+
 mass_eros = spacecraft_data.data_asteroids.mass;
 omega_body = spacecraft_data.data_asteroids.omega;
 
@@ -17,8 +20,6 @@ P_start = P0;
 flag = [];
 
 for i = 1:(length(tt)-1)
-
-    tao = 24*3600;
     
     meas_t = measurements.time == tt(i+1);
     meas = measurements.val(:, meas_t);
@@ -56,7 +57,6 @@ for i = 1:(length(tt)-1)
 
     end
     dt  = tt(i+1)-tt(i);
-    tau = 24*3600;                      % come avevi
     q = 2*sigma_acc^2 / tau;            % PSD per DMC
     Qk = Qd_DMC(dt, tau, q, eye(3));    % oppure M_RTN2I(t) se eta in RTN
 

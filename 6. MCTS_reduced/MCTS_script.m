@@ -67,6 +67,7 @@ nav_index = round(linspace(1, length(known_map), 300));
 % plotEllipsoidWithFeatures(F, V, ones(size(F, 1), 1), nav_index);
 
 alpha = [1/3; 1/3; 1/3]; %[mapping; exploitation; navigation]
+
 %Set up data for reachability
 spacecraft_data = struct();
 spacecraft_data.data_guidance.ReachabilityScoreComputation = 1;
@@ -77,15 +78,34 @@ spacecraft_data.data_guidance.safety_margin = 2*3600;
 spacecraft_data.data_guidance.DeltaT_after_man = 0.3*3600;
 spacecraft_data.data_guidance.r_impact = 24;
 spacecraft_data.data_guidance.r_escape = 100;
+
+%Set up data for the score function
 spacecraft_data.data_guidance.scientificFov1 = 8*pi/180;
 spacecraft_data.data_guidance.scientificFov2 = 8*pi/180;
 spacecraft_data.data_guidance.navigationFov1 = 15*pi/180;
 spacecraft_data.data_guidance.navigationFov2 = 15*pi/180;
 spacecraft_data.data_guidance.alpha = alpha;
+spacecraft_data.data_guidance.detPRef = -42;
+spacecraft_data.data_guidance.DU = 40;
+spacecraft_data.data_guidance.minLandmToScore = 5;
+
+%Set up data for navigation and uncertainties
 spacecraft_data.data_guidance.eta0 = eta0;
 spacecraft_data.data_guidance.sigma_magn = 0.05/3;
 spacecraft_data.data_guidance.sigma_align = 2/3*pi/180;
+spacecraft_data.data_guidance.process_noise = 5*10^-12;
+spacecraft_data.data_guidance.measurement_noise = sqrt( (100/3600*pi/180)^2 + (100/3600*pi/180)^2 ) ;
+spacecraft_data.data_guidance.tao = 24*3600;
 
+%Set up data for MCTS
+spacecraft_data.data_guidance.ka = 3;
+spacecraft_data.data_guidance.alpha_a = 0.1;
+spacecraft_data.data_guidance.ko = 3;
+spacecraft_data.data_guidance.alpha_o = 0.1;
+spacecraft_data.data_guidance.gamma = 1;
+spacecraft_data.data_guidance.expl_const = sqrt(2)/(3);
+
+%Set up data for asteroid state
 spacecraft_data.data_asteroids.Faces = F;
 spacecraft_data.data_asteroids.Vertexes = V;
 spacecraft_data.data_asteroids.Normals = N;
@@ -100,20 +120,20 @@ spacecraft_data.data_asteroids.features.score = score;
 spacecraft_data.data_asteroids.features.known_map_features = known_map;
 spacecraft_data.data_asteroids.navigation_features = nav_index;
 
-model_dyn = @(t, x) dynamicsModel(t, x, mass_eros, omega_body, C20, C22);
-truth_dyn = @(t, x) dynamicsTrue(t, x, mass_eros, omega_body);
+spacecraft_data.data_guidance.modelDynamics = @(t, x) dynamicsModel(t, x, mass_eros, omega_body, C20, C22);
+spacecraft_data.data_guidance.trueDynamics = @(t, x) dynamicsTrue(t, x, mass_eros, omega_body);
 
 %% RUN MCTS
 
-iterations = 200; %Number of iterations per tree (As a reference, for 200 iterations 45 min/1 h are required)
-n_trees = 2; %Number of trees
+iterations = 250; %Number of iterations per tree (As a reference, for 200 iterations 45 min/1 h are required)
+n_trees = 4; %Number of trees
 
 profile clear
 profile on
 [all_trees, real_trajectory, filter_trajectory, P_all, tt_all, ...
           total_mapping_score, total_exploiting_score, total_nav_score, ...
           action_times, all_flag, spacecraft_data_out] = ...
-    runMCTSBatch(spacecraft_data, r0, v0, t0, P0, iterations, n_trees, truth_dyn, options);
+    runMCTSBatch(spacecraft_data, r0, v0, t0, P0, iterations, n_trees, options);
 profile off
 profile viewer
 
@@ -123,7 +143,7 @@ n_set = 3;
 [real_trajectory, filter_trajectory, P_all, tt_all, ...
           total_mapping_score, total_exploiting_score, total_nav_score, ...
           action_times, all_flag, spacecraft_data_out] = ...
-    greedyApproach(spacecraft_data, r0, v0, t0, P0, n_actions, n_set, model_dyn, truth_dyn, options);
+    greedyApproach(spacecraft_data, r0, v0, t0, P0, n_actions, n_set, options);
 
 %% Plots
 %Plot errori posizione

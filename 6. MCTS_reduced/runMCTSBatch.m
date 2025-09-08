@@ -1,12 +1,13 @@
 function [all_trees, real_trajectory, filter_trajectory, P_all, tt_all, ...
           total_mapping_score, total_exploiting_score, total_nav_score, ...
           action_times, all_flag, spacecraft_data_out] = ...
-    runMCTSBatch(spacecraft_data, r0, v0, t0, P0, iterations, n_trees, truth_dyn, options)
+    runMCTSBatch(spacecraft_data, r0, v0, t0, P0, iterations, n_trees, options)
 
 %Questa funzione esegue n_trees alberi MCTS da iterations iterazioni in sequenza e aggrega i risultati.
 
 %Set up initial data
 spacecraft_data_new = spacecraft_data;
+truth_dyn = spacecraft_data.data_guidance.trueDynamics;
 
 real_r_start = r0(:);
 real_v_start = v0(:);

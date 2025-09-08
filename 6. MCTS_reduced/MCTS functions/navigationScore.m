@@ -1,18 +1,20 @@
 function [nav_score] = navigationScore(y, P0, t, spacecraft_data)
 
 omega = spacecraft_data.data_asteroids.omega(3);
+minLandToScore = spacecraft_data.data_guidance.minLandmToScore;
+DU = spacecraft_data.data_guidance.DU;
+detPRef = spacecraft_data.data_guidance.detPRef;
+
 [measurements] = measurementsFun(y, t, spacecraft_data);
 
 nav_bool = zeros(size(t));
 for i = 1:length(t)
     list = find(measurements.time == t(i));
-    if length(list)>=4
+    if length(list)>= minLandToScore
         nav_bool(i) = 1/length(t);
     end
 end
   
-detPRef = -42;
-DU = 40;
 TU = sqrt( DU^3/(astroConstants(1)*spacecraft_data.data_asteroids.mass) );
 VU = DU/TU + omega*DU;
 

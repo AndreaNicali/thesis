@@ -2,9 +2,8 @@ function [P_filtered, xx_filtered, eta_f, flag] = navigationFilter(y0, y_truth, 
 %Flag is 0 if the navigation hasn't been performed at that instant, 1 if it
 %has
 
-sigma_acc = 5e-12;
-
-sigma_meas = sqrt( (100/3600*pi/180)^2 + (100/3600*pi/180)^2 ) ; % 
+sigma_acc = spacecraft_data.data_guidance.process_noise;
+sigma_meas = spacecraft_data.data_guidance.measurement_noise;
 
 [measurements] = measurementsFun(y_truth, tt, spacecraft_data);
 
