@@ -18,6 +18,9 @@ end
 TU = sqrt( DU^3/(astroConstants(1)*spacecraft_data.data_asteroids.mass) );
 VU = DU/TU + omega*DU;
 
+if size(P0, 2) ~= 9
+    g = 4;
+end
 P_adim = zeros(size(P0(1:6, 1:6)));
 P_adim(1:3, 1:3) = P0(1:3, 1:3)/(DU*DU);
 P_adim(4:6, 1:3) = P0(4:6, 1:3)/(DU*VU);

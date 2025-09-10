@@ -54,15 +54,15 @@ vals = [1, 2];
 face_centroids = (V(F(:,1), :) + V(F(:,2), :) + V(F(:,3), :)) / 3;
 known_map = double( ...
     face_centroids(:,1) > 0 & ...
-    face_centroids(:,2) > 0 & ...
+    face_centroids(:,2) > -1000 & ...
     face_centroids(:,3) > 0 );
 
-%known_map = zeros(size(F, 1), 1);
+known_map = zeros(size(F, 1), 1);
 %Features for navigation
 nav_index = round(linspace(1, length(known_map), 300));
 
 % figure()
-% plotEllipsoidWithKnownRegion(F,V,score,ones(size(F, 1), 1));
+ plotEllipsoidWithKnownRegion(F,V,score,known_map);
 % figure()
 % plotEllipsoidWithFeatures(F, V, ones(size(F, 1), 1), nav_index);
 
@@ -103,7 +103,7 @@ spacecraft_data.data_guidance.alpha_a = 0.1;
 spacecraft_data.data_guidance.ko = 3;
 spacecraft_data.data_guidance.alpha_o = 0.1;
 spacecraft_data.data_guidance.gamma = 1;
-spacecraft_data.data_guidance.expl_const = sqrt(2)/(3);
+spacecraft_data.data_guidance.expl_const = sqrt(2)/1.5;
 
 %Set up data for asteroid state
 spacecraft_data.data_asteroids.Faces = F;
@@ -114,8 +114,8 @@ spacecraft_data.data_asteroids.omega = 2*pi/(5.27025547*3600)*[0; 0; 1];
 spacecraft_data.data_asteroids.C20 = C20;
 spacecraft_data.data_asteroids.C22 = C22;
 spacecraft_data.data_asteroids.mapping.known_map = known_map; %known zones
-spacecraft_data.data_asteroids.mapping.incidence = [0, 85]*pi/180; 
-spacecraft_data.data_asteroids.mapping.emission = [0, 85]*pi/180;
+spacecraft_data.data_asteroids.mapping.incidence = 85*pi/180; 
+spacecraft_data.data_asteroids.mapping.emission = 85*pi/180;
 spacecraft_data.data_asteroids.features.score = score;
 spacecraft_data.data_asteroids.features.known_map_features = known_map;
 spacecraft_data.data_asteroids.navigation_features = nav_index;
@@ -125,154 +125,297 @@ spacecraft_data.data_guidance.trueDynamics = @(t, x) dynamicsTrue(t, x, mass_ero
 
 %% RUN MCTS
 
-iterations = 250; %Number of iterations per tree (As a reference, for 200 iterations 45 min/1 h are required)
-n_trees = 4; %Number of trees
+iterations = 200; %Number of iterations per tree (As a reference, for 200 iterations 45 min/1 h are required)
+n_trees = 5; %Number of trees
 
 profile clear
 profile on
-[all_trees, real_trajectory, filter_trajectory, P_all, tt_all, ...
-          total_mapping_score, total_exploiting_score, total_nav_score, ...
-          action_times, all_flag, spacecraft_data_out] = ...
+[all_trees, real_trajectory_MCTS, filter_trajectory_MCTS, P_all_MCTS, tt_all_MCTS, ...
+          total_mapping_score_MCTS, total_exploiting_score_MCTS, total_nav_score_MCTS, ...
+          action_times_MCTS, all_flag_MCTS, action_list_MCTS, spacecraft_data_out_MCTS] = ...
     runMCTSBatch(spacecraft_data, r0, v0, t0, P0, iterations, n_trees, options);
 profile off
 profile viewer
 
+%%
+[real_trajectory_MCTS, filter_trajectory_MCTS, P_all_MCTS, tt_all_MCTS, ...
+          total_mapping_score_MCTS, total_exploiting_score_MCTS, total_nav_score_MCTS, ...
+          action_times_MCTS, all_flag_MCTS, action_list_MCTS, spacecraft_data_out_MCTS] = ...
+    recoverMCTSBatch(spacecraft_data, r0, v0, t0, P0, all_trees, n_trees, options);
+
 %% GREEDY
-n_actions = 4;
-n_set = 3;
-[real_trajectory, filter_trajectory, P_all, tt_all, ...
-          total_mapping_score, total_exploiting_score, total_nav_score, ...
-          action_times, all_flag, spacecraft_data_out] = ...
+n_set = length(action_list_MCTS);
+n_actions = zeros(n_set, 1);
+for i = 1:n_set
+    n_actions(i) = length(action_list_MCTS{i});
+end
+[real_trajectory_GREEDY, filter_trajectory_GREEDY, P_all_GREEDY, tt_all_GREEDY, ...
+          total_mapping_score_GREEDY, total_exploiting_score_GREEDY, total_nav_score_GREEDY, ...
+          action_times_GREEDY, all_flag_GREEDY, action_list_GREEDY, spacecraft_data_out_GREEDY] = ...
     greedyApproach(spacecraft_data, r0, v0, t0, P0, n_actions, n_set, options);
 
 %% Plots
 %Plot errori posizione
-final_scores = spacecraft_data_out.data_asteroids.features.score;
-final_known_map = spacecraft_data_out.data_asteroids.mapping.known_map;
+final_scores_MCTS = spacecraft_data_out_MCTS.data_asteroids.features.score;
+final_known_map_MCTS = spacecraft_data_out_MCTS.data_asteroids.mapping.known_map;
+final_scores_GREEDY = spacecraft_data_out_GREEDY.data_asteroids.features.score;
+final_known_map_GREEDY = spacecraft_data_out_GREEDY.data_asteroids.mapping.known_map;
 
 figure(1)
+subplot(1,2,1)
 tresig = [];
-error = vecnorm(real_trajectory(:, 1:3)-filter_trajectory(:, 1:3), 2, 2);
-error_plot = plot(( tt_all(1:end)-tt_all(1) )/3600, error, 'b', 'LineWidth',1.5);
+error = vecnorm(real_trajectory_MCTS(:, 1:3)-filter_trajectory_MCTS(:, 1:3), 2, 2);
+error_plot = plot(( tt_all_MCTS(1:end)-tt_all_MCTS(1) )/3600, error, 'b', 'LineWidth',1.5);
 hold on
-for i = 1:size(P_all, 3)
-    tresig = [tresig, 3*sqrt(trace(P_all(1:3, 1:3, i)))];
-    % if all_flag(i) == 1
-    %     xline(( tt_all(i)-tt_all(1) )/3600, 'Color', [207 233 255]/255, 'LineWidth', 0.5);
-    % end
+for i = 1:size(P_all_MCTS, 3)
+    tresig = [tresig, 3*sqrt(trace(P_all_MCTS(1:3, 1:3, i)))];
 end
-for i = 1:length(action_times)
-    act = xline( (action_times(i)-tt_all(1) )/3600, 'k--', 'LineWidth', 1);
+for i = 1:length(action_times_MCTS)
+    act = xline( (action_times_MCTS(i)-tt_all_MCTS(1) )/3600, 'k--', 'LineWidth', 1);
 end
-tresig_plot = plot(( tt_all(1:end)-tt_all(1) )/3600, tresig, 'g', 'LineWidth',1.5);
-plot(( tt_all(1:end)-tt_all(1) )/3600, -tresig, 'g', 'LineWidth',1.5)
+tresig_plot = plot(( tt_all_MCTS(1:end)-tt_all_MCTS(1) )/3600, tresig, 'g', 'LineWidth',1.5);
+plot(( tt_all_MCTS(1:end)-tt_all_MCTS(1) )/3600, -tresig, 'g', 'LineWidth',1.5)
 grid on
 grid minor
 xlabel('Time [h]')
 ylabel('[km]')
 legend([tresig_plot, error_plot, act], '3sigma r', 'error r', 'action')
+title('MCTS')
+
+subplot(1,2,2)
+tresig = [];
+error = vecnorm(real_trajectory_GREEDY(:, 1:3)-filter_trajectory_GREEDY(:, 1:3), 2, 2);
+error_plot = plot(( tt_all_GREEDY(1:end)-tt_all_GREEDY(1) )/3600, error, 'b', 'LineWidth',1.5);
+hold on
+for i = 1:size(P_all_GREEDY, 3)
+    tresig = [tresig, 3*sqrt(trace(P_all_GREEDY(1:3, 1:3, i)))];
+end
+for i = 1:length(action_times_GREEDY)
+    act = xline( (action_times_GREEDY(i)-tt_all_GREEDY(1) )/3600, 'k--', 'LineWidth', 1);
+end
+tresig_plot = plot(( tt_all_GREEDY(1:end)-tt_all_GREEDY(1) )/3600, tresig, 'g', 'LineWidth',1.5);
+plot(( tt_all_GREEDY(1:end)-tt_all_GREEDY(1) )/3600, -tresig, 'g', 'LineWidth',1.5)
+grid on
+grid minor
+xlabel('Time [h]')
+ylabel('[km]')
+legend([tresig_plot, error_plot, act], '3sigma r', 'error r', 'action')
+title('GREEDY')
 
 %Plot errori velocità
 figure(2)
+subplot(1,2,1)
 tresigv = [];
-errorv = vecnorm(real_trajectory(:, 4:6)-filter_trajectory(:, 4:6), 2, 2);
-error_plot = plot(( tt_all(1:end)-tt_all(1) )/3600, errorv*10^3, 'b', 'LineWidth',1.5);
+errorv = vecnorm(real_trajectory_MCTS(:, 4:6)-filter_trajectory_MCTS(:, 4:6), 2, 2);
+error_plot = plot(( tt_all_MCTS(1:end)-tt_all_MCTS(1) )/3600, errorv*10^3, 'b', 'LineWidth',1.5);
 hold on
-for i = 1:size(P_all, 3)
-    tresigv = [tresigv, 3*sqrt(trace(P_all(4:6, 4:6, i)))];
-    % if all_flag(i) == 1
-    %     xline(( tt_all(i)-tt_all(1) )/3600, 'Color', [207 233 255]/255, 'LineWidth', 0.5);
-    % end
+for i = 1:size(P_all_MCTS, 3)
+    tresigv = [tresigv, 3*sqrt(trace(P_all_MCTS(4:6, 4:6, i)))];
 end
-for i = 1:length(action_times)
-    act = xline( (action_times(i)-tt_all(1) )/3600, 'k--', 'LineWidth', 1);
+for i = 1:length(action_times_MCTS)
+    act = xline( (action_times_MCTS(i)-tt_all_MCTS(1) )/3600, 'k--', 'LineWidth', 1);
 end
-tresig_plot = plot(( tt_all(1:end)-tt_all(1) )/3600, tresigv*10^3, 'g', 'LineWidth',1.5);
-plot(( tt_all(1:end)-tt_all(1) )/3600, -tresigv*10^3, 'g', 'LineWidth',1.5)
+tresig_plot = plot(( tt_all_MCTS(1:end)-tt_all_MCTS(1) )/3600, tresigv*10^3, 'g', 'LineWidth',1.5);
+plot(( tt_all_MCTS(1:end)-tt_all_MCTS(1) )/3600, -tresigv*10^3, 'g', 'LineWidth',1.5)
 grid on
 grid minor
 xlabel('Time [h]')
 ylabel('[m/s]')
 legend([tresig_plot, error_plot, act], '3sigma v', 'error v', 'action')
+title('MCTS')
+
+subplot(1,2,2)
+tresigv = [];
+errorv = vecnorm(real_trajectory_GREEDY(:, 4:6)-filter_trajectory_GREEDY(:, 4:6), 2, 2);
+error_plot = plot(( tt_all_GREEDY(1:end)-tt_all_GREEDY(1) )/3600, errorv*10^3, 'b', 'LineWidth',1.5);
+hold on
+for i = 1:size(P_all_GREEDY, 3)
+    tresigv = [tresigv, 3*sqrt(trace(P_all_GREEDY(4:6, 4:6, i)))];
+end
+for i = 1:length(action_times_GREEDY)
+    act = xline( (action_times_GREEDY(i)-tt_all_GREEDY(1) )/3600, 'k--', 'LineWidth', 1);
+end
+tresig_plot = plot(( tt_all_GREEDY(1:end)-tt_all_GREEDY(1) )/3600, tresigv*10^3, 'g', 'LineWidth',1.5);
+plot(( tt_all_GREEDY(1:end)-tt_all_GREEDY(1) )/3600, -tresigv*10^3, 'g', 'LineWidth',1.5)
+grid on
+grid minor
+xlabel('Time [h]')
+ylabel('[m/s]')
+legend([tresig_plot, error_plot, act], '3sigma v', 'error v', 'action')
+title('GREEDY')
 
 %Plot Score
+m_MCTS = cumsum(total_mapping_score_MCTS*alpha(1));
+e_MCTS = cumsum(total_exploiting_score_MCTS*alpha(2));
+n_MCTS = cumsum(total_nav_score_MCTS*alpha(3));
+m_GREEDY = cumsum(total_mapping_score_GREEDY*alpha(1));
+e_GREEDY = cumsum(total_exploiting_score_GREEDY*alpha(2));
+n_GREEDY = cumsum(total_nav_score_GREEDY*alpha(3));
+ymin_all = min([m_MCTS(:); e_MCTS(:); n_MCTS(:); m_GREEDY(:); e_GREEDY(:); n_GREEDY(:)]);
+ymax_all = max([m_MCTS(:); e_MCTS(:); n_MCTS(:); m_GREEDY(:); e_GREEDY(:); n_GREEDY(:)]);
+
 figure(3)
-m = plot(( tt_all(1:end)-tt_all(1) )/3600, cumsum(total_mapping_score*alpha(1)), 'g', 'LineWidth', 1.5);
+subplot(1,2,1)
+m = plot(( tt_all_MCTS(1:end)-tt_all_MCTS(1) )/3600, m_MCTS, 'g', 'LineWidth', 1.5);
 hold on
-e = plot(( tt_all(1:end)-tt_all(1) )/3600, cumsum(total_exploiting_score*alpha(2)), 'b', 'LineWidth', 1.5);
-n = plot(( tt_all(1:end)-tt_all(1) )/3600, cumsum(total_nav_score*alpha(3)), 'r', 'LineWidth', 1.5);
-for i = 1:length(action_times)
-    act = xline( (action_times(i)-tt_all(1) )/3600, 'k--', 'LineWidth', 1);
+e = plot(( tt_all_MCTS(1:end)-tt_all_MCTS(1) )/3600, e_MCTS, 'b', 'LineWidth', 1.5);
+n = plot(( tt_all_MCTS(1:end)-tt_all_MCTS(1) )/3600, n_MCTS, 'r', 'LineWidth', 1.5);
+for i = 1:length(action_times_MCTS)
+    act = xline( (action_times_MCTS(i)-tt_all_MCTS(1) )/3600, 'k--', 'LineWidth', 1);
 end
 grid on
 grid minor
 xlabel('Time [h]')
 ylabel('Score [-]')
+ylim([ymin_all ymax_all])
 legend([m, e, n, act], 'Mapping Score*alpha1', 'Exploit Score*alpha2', 'Navigation Score*alpha3', 'Actions')
+title('MCTS')
+
+subplot(1,2,2)
+m = plot(( tt_all_GREEDY(1:end)-tt_all_GREEDY(1) )/3600, m_GREEDY, 'g', 'LineWidth', 1.5);
+hold on
+e = plot(( tt_all_GREEDY(1:end)-tt_all_GREEDY(1) )/3600, e_GREEDY, 'b', 'LineWidth', 1.5);
+n = plot(( tt_all_GREEDY(1:end)-tt_all_GREEDY(1) )/3600, n_GREEDY, 'r', 'LineWidth', 1.5);
+for i = 1:length(action_times_GREEDY)
+    act = xline( (action_times_GREEDY(i)-tt_all_GREEDY(1) )/3600, 'k--', 'LineWidth', 1);
+end
+grid on
+grid minor
+xlabel('Time [h]')
+ylabel('Score [-]')
+ylim([ymin_all ymax_all])
+legend([m, e, n, act], 'Mapping Score*alpha1', 'Exploit Score*alpha2', 'Navigation Score*alpha3', 'Actions')
+title('GREEDY')
 
 %Plot traiettoria in body frame
 figure(4)
-plot3(real_trajectory(:, 1), real_trajectory(:, 2), real_trajectory(:, 3), 'b', 'LineWidth', 1.5)
+subplot(1,2,1)
+plot3(real_trajectory_MCTS(:, 1), real_trajectory_MCTS(:, 2), real_trajectory_MCTS(:, 3), 'b', 'LineWidth', 1.5)
 hold on
-for i = 1:length(action_times)
-    pos = find(tt_all == action_times(i));
-    man = plot3(real_trajectory(pos, 1), real_trajectory(pos, 2), real_trajectory(pos, 3), 'b.', 'MarkerSize', 15);
+for i = 1:length(action_times_MCTS)
+    pos = find(abs(tt_all_MCTS - action_times_MCTS(i)) < 1e-9, 1, 'first');
+    man_MCTS = plot3(real_trajectory_MCTS(pos, 1), real_trajectory_MCTS(pos, 2), real_trajectory_MCTS(pos, 3), 'b.', 'MarkerSize', 15);
 end
-plotEllipsoidWithKnownRegion(F, V, final_scores, final_known_map)
+plotEllipsoidWithKnownRegion(F, V, final_scores_MCTS, final_known_map_MCTS)
 grid on
 grid minor
 xlabel('X [km]')
 zlabel('Z [km]')
 ylabel('Y [km]')
-legend(man, 'Manoeuvring Point')
+legend(man_MCTS, 'Manoeuvring Point')
+title('MCTS')
+
+subplot(1,2,2)
+plot3(real_trajectory_GREEDY(:, 1), real_trajectory_GREEDY(:, 2), real_trajectory_GREEDY(:, 3), 'b', 'LineWidth', 1.5)
+hold on
+for i = 1:length(action_times_GREEDY)
+    pos = find(abs(tt_all_GREEDY - action_times_GREEDY(i)) < 1e-9, 1, 'first');
+    man_GREEDY = plot3(real_trajectory_GREEDY(pos, 1), real_trajectory_GREEDY(pos, 2), real_trajectory_GREEDY(pos, 3), 'b.', 'MarkerSize', 15);
+end
+plotEllipsoidWithKnownRegion(F, V, final_scores_GREEDY, final_known_map_GREEDY)
+grid on
+grid minor
+xlabel('X [km]')
+zlabel('Z [km]')
+ylabel('Y [km]')
+legend(man_GREEDY, 'Manoeuvring Point')
+title('GREEDY')
 
 %Plot traiettoria in inertial
 figure(5)
-trajectory_in = zeros(size(real_trajectory(:, 1:3)));
-for i = 1:length(tt_all)
-    R_body2in = cspice_pxform('IAU_EROS', 'ECLIPJ2000', tt_all(i)); 
-    trajectory_in(i, :) = (R_body2in*real_trajectory(i, 1:3)')';
+trajectory_in_MCTS = zeros(size(real_trajectory_MCTS(:, 1:3)));
+for i = 1:length(tt_all_MCTS)
+    R_body2in = cspice_pxform('IAU_EROS', 'ECLIPJ2000', tt_all_MCTS(i)); 
+    trajectory_in_MCTS(i, :) = (R_body2in*real_trajectory_MCTS(i, 1:3)')';
 end
-plotEllipsoidWithKnownRegion(F, V, score, final_known_map);
-plot3(trajectory_in(:, 1), trajectory_in(:, 2), trajectory_in(:, 3), 'b', 'LineWidth', 1.5)
+trajectory_in_GREEDY = zeros(size(real_trajectory_GREEDY(:, 1:3)));
+for i = 1:length(tt_all_GREEDY)
+    R_body2in = cspice_pxform('IAU_EROS', 'ECLIPJ2000', tt_all_GREEDY(i)); 
+    trajectory_in_GREEDY(i, :) = (R_body2in*real_trajectory_GREEDY(i, 1:3)')';
+end
+
+subplot(1,2,1)
+plotEllipsoidWithKnownRegion(F, V, final_scores_MCTS, final_known_map_MCTS);
+plot3(trajectory_in_MCTS(:, 1), trajectory_in_MCTS(:, 2), trajectory_in_MCTS(:, 3), 'b', 'LineWidth', 1.5)
 hold on
-for i = 1:length(action_times)
-    pos = find(tt_all == action_times(i));
-    man = plot3(trajectory_in(pos, 1), trajectory_in(pos, 2), trajectory_in(pos, 3), 'b.', 'MarkerSize', 15);
+for i = 1:length(action_times_MCTS)
+    pos = find(abs(tt_all_MCTS - action_times_MCTS(i)) < 1e-9, 1, 'first');
+    man_MCTS = plot3(trajectory_in_MCTS(pos, 1), trajectory_in_MCTS(pos, 2), trajectory_in_MCTS(pos, 3), 'b.', 'MarkerSize', 15);
 end
-%plotSunPointingVector(tt_all, 'ECLIPJ2000')
-title('Trajectory in ECLIPJ2000')
+title('Trajectory in ECLIPJ2000 - MCTS')
 grid on
 grid minor
 xlabel('X [km]')
 zlabel('Z [km]')
 ylabel('Y [km]')
-legend(man, 'Manoeuvring Point')
+legend(man_MCTS, 'Manoeuvring Point')
+
+subplot(1,2,2)
+plotEllipsoidWithKnownRegion(F, V, final_scores_GREEDY, final_known_map_GREEDY);
+plot3(trajectory_in_GREEDY(:, 1), trajectory_in_GREEDY(:, 2), trajectory_in_GREEDY(:, 3), 'b', 'LineWidth', 1.5)
+hold on
+for i = 1:length(action_times_GREEDY)
+    pos = find(abs(tt_all_GREEDY - action_times_GREEDY(i)) < 1e-9, 1, 'first');
+    man_GREEDY = plot3(trajectory_in_GREEDY(pos, 1), trajectory_in_GREEDY(pos, 2), trajectory_in_GREEDY(pos, 3), 'b.', 'MarkerSize', 15);
+end
+title('Trajectory in ECLIPJ2000 - GREEDY')
+grid on
+grid minor
+xlabel('X [km]')
+zlabel('Z [km]')
+ylabel('Y [km]')
+legend(man_GREEDY, 'Manoeuvring Point')
 
 %Plot errori velocità
 figure(6)
+subplot(1,2,1)
 determs = [];
 hold on
-for i = 1:size(P_all, 3)
+for i = 1:size(P_all_MCTS, 3)
     DU = 40;
     TU = sqrt( DU^3/(astroConstants(1)*spacecraft_data.data_asteroids.mass) );
     VU = DU/TU + omega_body(3)*DU;
     
-    P_adim = zeros(size(P_all(1:6, 1:6)));
-    P_adim(1:3, 1:3) = P_all(1:3, 1:3, i)/(DU*DU);
-    P_adim(4:6, 1:3) = P_all(4:6, 1:3, i)/(DU*VU);
-    P_adim(1:3, 4:6) = P_all(1:3, 4:6, i)/(DU*VU);
-    P_adim(4:6, 4:6) = P_all(4:6, 4:6, i)/(VU*VU);
+    P_adim = zeros(size(P_all_MCTS(1:6, 1:6)));
+    P_adim(1:3, 1:3) = P_all_MCTS(1:3, 1:3, i)/(DU*DU);
+    P_adim(4:6, 1:3) = P_all_MCTS(4:6, 1:3, i)/(DU*VU);
+    P_adim(1:3, 4:6) = P_all_MCTS(1:3, 4:6, i)/(DU*VU);
+    P_adim(4:6, 4:6) = P_all_MCTS(4:6, 4:6, i)/(VU*VU);
     determs = [determs, log10(det(P_adim))];
-
 end
-for i = 1:length(action_times)
-    act = xline( (action_times(i)-tt_all(1) )/3600, 'k--', 'LineWidth', 1);
+for i = 1:length(action_times_MCTS)
+    act = xline( (action_times_MCTS(i)-tt_all_MCTS(1) )/3600, 'k--', 'LineWidth', 1);
 end
-deter_plot = semilogy(( tt_all(1:end)-tt_all(1) )/3600, determs, 'g', 'LineWidth',1.5);
+deter_plot = semilogy(( tt_all_MCTS(1:end)-tt_all_MCTS(1) )/3600, determs, 'g', 'LineWidth',1.5);
 grid on
 grid minor
 xlabel('Time [h]')
 ylabel('[-]')
 legend([deter_plot, act], 'log10(det(P)) [-]', 'action')
+title('MCTS')
 
+subplot(1,2,2)
+determs = [];
+hold on
+for i = 1:size(P_all_GREEDY, 3)
+    DU = 40;
+    TU = sqrt( DU^3/(astroConstants(1)*spacecraft_data.data_asteroids.mass) );
+    VU = DU/TU + omega_body(3)*DU;
+    
+    P_adim = zeros(size(P_all_GREEDY(1:6, 1:6)));
+    P_adim(1:3, 1:3) = P_all_GREEDY(1:3, 1:3, i)/(DU*DU);
+    P_adim(4:6, 1:3) = P_all_GREEDY(4:6, 1:3, i)/(DU*VU);
+    P_adim(1:3, 4:6) = P_all_GREEDY(1:3, 4:6, i)/(DU*VU);
+    P_adim(4:6, 4:6) = P_all_GREEDY(4:6, 4:6, i)/(VU*VU);
+    determs = [determs, log10(det(P_adim))];
+end
+for i = 1:length(action_times_GREEDY)
+    act = xline( (action_times_GREEDY(i)-tt_all_GREEDY(1) )/3600, 'k--', 'LineWidth', 1);
+end
+deter_plot = semilogy(( tt_all_GREEDY(1:end)-tt_all_GREEDY(1) )/3600, determs, 'g', 'LineWidth',1.5);
+grid on
+grid minor
+xlabel('Time [h]')
+ylabel('[-]')
+legend([deter_plot, act], 'log10(det(P)) [-]', 'action')
+title('GREEDY')

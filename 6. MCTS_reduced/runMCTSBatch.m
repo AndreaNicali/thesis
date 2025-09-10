@@ -1,6 +1,6 @@
 function [all_trees, real_trajectory, filter_trajectory, P_all, tt_all, ...
           total_mapping_score, total_exploiting_score, total_nav_score, ...
-          action_times, all_flag, spacecraft_data_out] = ...
+          action_times, all_flag, action_list, spacecraft_data_out] = ...
     runMCTSBatch(spacecraft_data, r0, v0, t0, P0, iterations, n_trees, options)
 
 %Questa funzione esegue n_trees alberi MCTS da iterations iterazioni in sequenza e aggrega i risultati.
@@ -29,6 +29,7 @@ total_mapping_score    = [];
 total_exploiting_score = [];
 total_nav_score        = [];
 action_times           = [];
+action_list = {};
 
 sigma_magn = spacecraft_data.data_guidance.sigma_magn;
 sigma_align= spacecraft_data.data_guidance.sigma_align;
@@ -56,7 +57,7 @@ for i = 1:n_trees
     XX_filter = [];
     P_filtered = [];
     TT_real = [];
-    cov_div = tree{1}.cov;           % cov di partenza
+    cov_div = P_start;           % cov di partenza
     flags = [];
     y0 = [plan_r_start', plan_v_start'];
 
@@ -87,7 +88,7 @@ for i = 1:n_trees
             flags     = [flags,     flag(2:end)];
         end
 
-        cov_div = P_filtered(:, :, end);
+        cov_div = reshape( P_filtered(:, :, end), 9, 9);
         y0 = XX_filter(end, :);
 
         spacecraft_data_new.data_guidance.eta0 = eta_f;
@@ -151,6 +152,7 @@ for i = 1:n_trees
     plan_v_start = XX_filter(end, 4:6)';
 
     action_times = [action_times, best_final_times(:)'];
+    action_list{i} = planned_best_actions;
 
     all_trees{i} = tree;
 end

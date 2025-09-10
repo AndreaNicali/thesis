@@ -1,6 +1,6 @@
 function [real_trajectory, filter_trajectory, P_all, tt_all, ...
           total_mapping_score, total_exploiting_score, total_nav_score, ...
-          action_times, all_flag, spacecraft_data_out] = ...
+          action_times, all_flag, action_list, spacecraft_data_out] = ...
     greedyApproach(spacecraft_data, r0, v0, t0, P0, n_actions, n_set, options)
 
 
@@ -35,6 +35,7 @@ action_times           = t_start;
 action_times_log       = action_times;
 
 planned_actions = [];
+action_list = {};
 
 sigma_magn = spacecraft_data.data_guidance.sigma_magn;
 sigma_align= spacecraft_data.data_guidance.sigma_align;
@@ -122,8 +123,10 @@ for i = 1:n_set
     plan_r_start = filter_r_start;
     plan_v_start = filter_v_start;
     t_start      = action_times(end);   
+    action_list{i} = planned_actions;
+
     planned_actions = [];
-    action_times    = t_start;         
+    action_times    = t_start;
 end
 
 action_times = action_times_log;

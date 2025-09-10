@@ -336,7 +336,7 @@ for i = 1:length(layer)
         UCB_score(i) = inf;
 
     else
-        average_score = tree{layer(i)}.score / tree{layer(i)}.visits;
+        average_score = tree{layer(i)}.score; %/ tree{layer(i)}.visits;
         exploration = c * sqrt(log(N_parents) / tree{layer(i)}.visits);
         UCB_score(i) = average_score + exploration;
 
@@ -349,3 +349,4 @@ end
 id_node = layer(id);
 
 end
+
