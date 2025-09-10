@@ -51,11 +51,11 @@ vals = [1, 2];
 [F, V, N, C20, C22, A, score] = EllipsoidGenerationFib(a, b, c, M, centres, vals);
 
 %Set initial asteroid knowledge
-% face_centroids = (V(F(:,1), :) + V(F(:,2), :) + V(F(:,3), :)) / 3;
-% known_map = double( ...
-%     face_centroids(:,1) > 0 & ...
-%     face_centroids(:,2) > 0 & ...
-%     face_centroids(:,3) > 0 );
+face_centroids = (V(F(:,1), :) + V(F(:,2), :) + V(F(:,3), :)) / 3;
+known_map = double( ...
+    face_centroids(:,1) > 0 & ...
+    face_centroids(:,2) > 0 & ...
+    face_centroids(:,3) > 0 );
 
 known_map = zeros(size(F, 1), 1);
 %Features for navigation
@@ -94,8 +94,8 @@ spacecraft_data.data_asteroids.omega = 2*pi/(5.27025547*3600)*[0; 0; 1];
 spacecraft_data.data_asteroids.C20 = C20;
 spacecraft_data.data_asteroids.C22 = C22;
 spacecraft_data.data_asteroids.mapping.known_map = known_map; %known zones
-spacecraft_data.data_asteroids.mapping.incidence = [0, 85]*pi/180; 
-spacecraft_data.data_asteroids.mapping.emission = [0, 85]*pi/180;
+spacecraft_data.data_asteroids.mapping.incidence = 85*pi/180; 
+spacecraft_data.data_asteroids.mapping.emission = 85*pi/180;
 spacecraft_data.data_asteroids.features.score = score;
 spacecraft_data.data_asteroids.features.known_map_features = known_map;
 spacecraft_data.data_asteroids.navigation_features = nav_index;
@@ -105,14 +105,17 @@ truth_dyn = @(t, x) dynamicsTrue(t, x, mass_eros, omega_body);
 
 %% RUN MCTS
 
-iterations = 50; %Number of iterations per tree (As a reference, for 200 iterations 45 min/1 h are required)
-n_trees = 4; %Number of trees
+iterations = 100; %Number of iterations per tree (As a reference, for 200 iterations 45 min/1 h are required)
+n_trees = 2; %Number of trees
 
+profile clear
+profile on
 [all_trees, real_trajectory, filter_trajectory, P_all, tt_all, ...
           total_mapping_score, total_exploiting_score, total_nav_score, ...
           action_times, all_flag, spacecraft_data_out] = ...
     runMCTSBatch(spacecraft_data, r0, v0, t0, P0, iterations, n_trees, truth_dyn, options);
-
+profile off
+profile viewer
 %% Plots
 %Plot errori posizione
 final_scores = spacecraft_data_out.data_asteroids.features.score;
@@ -216,4 +219,31 @@ xlabel('X [km]')
 zlabel('Z [km]')
 ylabel('Y [km]')
 legend(man, 'Manoeuvring Point')
+
+%Plot errori velocità
+figure(6)
+determs = [];
+hold on
+for i = 1:size(P_all, 3)
+    DU = 40;
+    TU = sqrt( DU^3/(astroConstants(1)*spacecraft_data.data_asteroids.mass) );
+    VU = DU/TU + omega_body(3)*DU;
+    
+    P_adim = zeros(size(P_all(1:6, 1:6)));
+    P_adim(1:3, 1:3) = P_all(1:3, 1:3, i)/(DU*DU);
+    P_adim(4:6, 1:3) = P_all(4:6, 1:3, i)/(DU*VU);
+    P_adim(1:3, 4:6) = P_all(1:3, 4:6, i)/(DU*VU);
+    P_adim(4:6, 4:6) = P_all(4:6, 4:6, i)/(VU*VU);
+    determs = [determs, log10(det(P_adim))];
+
+end
+for i = 1:length(action_times)
+    act = xline( (action_times(i)-tt_all(1) )/3600, 'k--', 'LineWidth', 1);
+end
+deter_plot = semilogy(( tt_all(1:end)-tt_all(1) )/3600, determs, 'g', 'LineWidth',1.5);
+grid on
+grid minor
+xlabel('Time [h]')
+ylabel('[-]')
+legend([deter_plot, act], 'log10(det(P)) [-]', 'action')
 

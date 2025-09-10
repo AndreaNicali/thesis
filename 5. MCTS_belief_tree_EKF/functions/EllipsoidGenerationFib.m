@@ -82,7 +82,7 @@ total_score = sum(score_map);
 % COSTRUZIONE score_struct (come prima)
 %------------------------
 score_struct = repmat(struct('score', 0, 'type', '', 'angles', [], ...
-    'completeness', 0, 'id', [], 'ideal_range', [], 'actual_range', []), size(F,1), 1);
+    'completeness', [0; 0; 0; 0], 'id', [], 'ideal_range', [], 'actual_range', []), size(F,1), 1);
 
 for f = 1:size(F,1)
     if score_map(f) > 0

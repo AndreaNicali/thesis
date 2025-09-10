@@ -11,7 +11,7 @@ for i = 1:length(t)
     end
 end
   
-detPRef = -46;
+detPRef = -42;
 DU = 40;
 TU = sqrt( DU^3/(astroConstants(1)*spacecraft_data.data_asteroids.mass) );
 VU = DU/TU + omega*DU;
