@@ -44,7 +44,7 @@ c = 5.332;
 M = 1000;
 
 % Features positioning and values
-centres = [120, 965];
+centres = [310, 1700];
 vals = [1, 2];
 
 % Asteroid model generation
@@ -54,19 +54,19 @@ vals = [1, 2];
 face_centroids = (V(F(:,1), :) + V(F(:,2), :) + V(F(:,3), :)) / 3;
 known_map = double( ...
     face_centroids(:,1) > 0 & ...
-    face_centroids(:,2) > -1000 & ...
-    face_centroids(:,3) > 0 );
+    face_centroids(:,2) > 0 & ...
+    face_centroids(:,3) < 0 );
 
 known_map = zeros(size(F, 1), 1);
 %Features for navigation
 nav_index = round(linspace(1, length(known_map), 300));
 
 % figure()
- plotEllipsoidWithKnownRegion(F,V,score,known_map);
+plotEllipsoidWithKnownRegion(F,V,score,known_map);
 % figure()
-% plotEllipsoidWithFeatures(F, V, ones(size(F, 1), 1), nav_index);
+%plotEllipsoidWithFeatures(F, V, ones(size(F, 1), 1), nav_index);
 
-alpha = [1/3; 1/3; 1/3]; %[mapping; exploitation; navigation]
+alpha = [1/3; 1/2; 1/6]; %[mapping; exploitation; navigation]
 
 %Set up data for reachability
 spacecraft_data = struct();
@@ -125,8 +125,8 @@ spacecraft_data.data_guidance.trueDynamics = @(t, x) dynamicsTrue(t, x, mass_ero
 
 %% RUN MCTS
 
-iterations = 200; %Number of iterations per tree (As a reference, for 200 iterations 45 min/1 h are required)
-n_trees = 5; %Number of trees
+iterations = 150; %Number of iterations per tree (As a reference, for 200 iterations 45 min/1 h are required)
+n_trees = 3; %Number of trees
 
 profile clear
 profile on
@@ -138,17 +138,18 @@ profile off
 profile viewer
 
 %%
-[real_trajectory_MCTS, filter_trajectory_MCTS, P_all_MCTS, tt_all_MCTS, ...
-          total_mapping_score_MCTS, total_exploiting_score_MCTS, total_nav_score_MCTS, ...
-          action_times_MCTS, all_flag_MCTS, action_list_MCTS, spacecraft_data_out_MCTS] = ...
-    recoverMCTSBatch(spacecraft_data, r0, v0, t0, P0, all_trees, n_trees, options);
+% [real_trajectory_MCTS, filter_trajectory_MCTS, P_all_MCTS, tt_all_MCTS, ...
+%           total_mapping_score_MCTS, total_exploiting_score_MCTS, total_nav_score_MCTS, ...
+%           action_times_MCTS, all_flag_MCTS, action_list_MCTS, spacecraft_data_out_MCTS] = ...
+%     recoverMCTSBatch(spacecraft_data, r0, v0, t0, P0, all_trees, n_trees, options);
 
 %% GREEDY
 n_set = length(action_list_MCTS);
 n_actions = zeros(n_set, 1);
 for i = 1:n_set
-    n_actions(i) = length(action_list_MCTS{i});
+    n_actions(i) = size(action_list_MCTS{i}, 2);
 end
+
 [real_trajectory_GREEDY, filter_trajectory_GREEDY, P_all_GREEDY, tt_all_GREEDY, ...
           total_mapping_score_GREEDY, total_exploiting_score_GREEDY, total_nav_score_GREEDY, ...
           action_times_GREEDY, all_flag_GREEDY, action_list_GREEDY, spacecraft_data_out_GREEDY] = ...
@@ -419,3 +420,51 @@ xlabel('Time [h]')
 ylabel('[-]')
 legend([deter_plot, act], 'log10(det(P)) [-]', 'action')
 title('GREEDY')
+
+%%
+%Confronto dispersion e knowledge
+figure(7)
+action_list = [];
+action_times = intersect(action_times_MCTS, action_times_MCTS);
+cum_act = cumsum(n_actions);
+xx_starting = zeros(n_set, 6);
+for i = 1:length(n_actions)
+    if i == 1
+        xx_starting(i, :) = filter_trajectory_MCTS(find(tt_all_MCTS == action_times(cum_act(1))), :)
+    else
+        xx_starting(i, :) = filter_trajectory_MCTS(find(tt_all_MCTS == action_times(cum_act(i-1)+1)), :);
+    end
+end
+model_trajectory_MCTS = [];
+TT_model = [];
+for i = 1:(n_set)
+    action_set = action_list_MCTS{i};
+    if i == 1
+        action_times_set = action_times(1:cum_act(i)+1);
+    else
+        action_times_set = action_times( (cum_act(i-1)+1):cum_act(i)+1 );
+    end
+    [TT, XX_model_parz] = compute_trajectory(xx_starting(i, :)', action_times_set, action_set, spacecraft_data.data_guidance.modelDynamics, options);
+
+    for j = 1:length(XX_model_parz)
+        model_trajectory_MCTS = [model_trajectory_MCTS; XX_model_parz{j}];
+        TT_model = [TT_model; TT{j}];
+    end
+
+end
+
+[C,ia] = intersect(TT_model, TT_model, 'stable');
+model_trajectory_MCTS = model_trajectory_MCTS(ia, :);
+
+dispersion_pos = vecnorm(model_trajectory_MCTS(:, 1:3)-real_trajectory_MCTS(:, 1:3), 2, 2);
+knowledge_pos = vecnorm(filter_trajectory_MCTS(:, 1:3)-real_trajectory_MCTS(:, 1:3), 2, 2);
+
+dispe = plot((tt_all_MCTS-tt_all_MCTS(1))/3600, dispersion_pos, 'r', 'LineWidth', 1.5)
+hold on
+knowl = plot((tt_all_MCTS-tt_all_MCTS(1))/3600, knowledge_pos, 'b', 'LineWidth', 1.5)
+grid on
+grid minor
+xlabel('Time [h]')
+ylabel('Val [Km]')
+legend([dispe, knowl], 'Dispersion', 'Knowledge')
+title('Dispersion vs Knowledge of position')

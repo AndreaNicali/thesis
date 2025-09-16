@@ -4,25 +4,26 @@ function [F, V, N, C20, C22, A, score_struct] = EllipsoidGenerationFib(a, b, c, 
 % PUNTI con reticolo di Fibonacci
 %------------------------
 gold = (1+sqrt(5))/2;
+lat = zeros(length(M),1);
+lon = zeros(length(M),1);
 
-k = (0:M-1).';
-z = 1 - 2*(k+0.5)/M;
-theta = 2*pi*k/gold;
-r = sqrt(max(0,1 - z.^2));
-
-xs = r .* cos(theta);
-ys = r .* sin(theta);
-zs = z;
-
-% scala a ellissoide
-V = [a*xs, b*ys, c*zs];
+for i = 1:M/2
+    lat(i) = asin(2*i/(M+1));
+    lat(i+M/2) = asin(2*(-i)/(M+1));
+    lon(i) = mod(i, gold)*2*pi/gold;
+    lon(i+M/2) = mod(-i, gold)*2*pi/gold;
+end
+xs = cos(lat).*cos(lon);
+ys = cos(lat).*sin(lon);
+zs = sin(lat);
+V = [a*xs', b*ys', c*zs'];
 
 % triangolazione della superficie con l’involucro convesso
 K = convhull(V);
 F = K;
 
 %------------------------
-% COEFFICIENTI (come prima)
+% COEFFICIENTI
 %------------------------
 C20 = -5.24618393097E-02;
 C22 =  8.23993879858E-02;

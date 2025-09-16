@@ -124,6 +124,7 @@ for i = 1:n_set
     plan_v_start = filter_v_start;
     t_start      = action_times(end);   
     action_list{i} = planned_actions;
+    spacecraft_data_plan = spacecraft_data_real;
 
     planned_actions = [];
     action_times    = t_start;
