@@ -1,0 +1,347 @@
+clc
+clear
+close all
+
+addpath(genpath('kernels\'))
+addpath(genpath('functions\'))
+addpath(genpath('3dModel\'))
+addpath(genpath('dynamics\'))
+addpath(genpath('Uncertainties\'))
+addpath(genpath('Reachability\'))
+addpath(genpath('MCTS functions\'))
+
+cspice_furnsh('kernels\naif0012.tls');
+cspice_furnsh('kernels\erosephem_1999004_2002181.bsp')
+cspice_furnsh('kernels\erosatt_1998329_2001157_v01.bpc');
+
+options = odeset('reltol', 1e-12, 'abstol', [ones(3,1)*1e-8; ones(3,1)*1e-11]);
+
+%% Initial data
+%Initial Conditions
+t0 = cspice_str2et('2000-08-01 T01:00:00');
+
+r0 = [8.5855;   44.6428;   -4.4817]; %km
+v0 = [0.0164;   -0.0032;    0.0018]; %km/s
+eta0 = zeros(1, 3);
+
+sigma_pos = 0.01; %km
+sigma_vel = 0.01*10^-3; %km/s
+%P0 = [eye(3)*sigma_pos^2, zeros(3); zeros(3),  eye(3)*sigma_vel^2];
+P0 = zeros(9);
+P0(1:3, 1:3) = eye(3)*sigma_pos^2;
+P0(4:6, 4:6) = eye(3)*sigma_vel^2;
+P0(7:9, 7:9) = eye(3)*(10^-12)^2;
+
+%Data for body frame propagation
+T_rotation_eros = 5.27025547*3600; %s
+omega_body = 2*pi/T_rotation_eros*[0; 0; 1]; %rad/s
+mass_eros = 6.687e15; %kg
+
+% Semiaxis (in km) of the asteroid model 
+a = 20.591;
+b = 5.711;
+c = 5.332;
+M = 1000;
+
+% Features positioning and values
+centres = [120, 965];
+vals = [1, 2];
+
+% Asteroid model generation
+[F, V, N, C20, C22, A, score] = EllipsoidGenerationFib(a, b, c, M, centres, vals);
+
+%Set initial asteroid knowledge
+face_centroids = (V(F(:,1), :) + V(F(:,2), :) + V(F(:,3), :)) / 3;
+known_map = double( ...
+    face_centroids(:,1) > 0 & ...
+    face_centroids(:,2) > 0 & ...
+    face_centroids(:,3) > 0 );
+
+%known_map = zeros(size(F, 1), 1);
+
+%Features for navigation
+nav_index = round(linspace(1, length(known_map), 300));
+
+% figure()
+% plotEllipsoidWithKnownRegion(F,V,score,ones(size(F, 1), 1));
+% figure()
+% plotEllipsoidWithFeatures(F, V, ones(size(F, 1), 1), nav_index);
+
+%Set up data for reachability
+spacecraft_data = struct();
+spacecraft_data.data_guidance.ReachabilityScoreComputation = 1;
+spacecraft_data.data_guidance.ReachabilityExplorationScheme = 2;
+spacecraft_data.data_guidance.DeltaV_max = 2e-3;
+spacecraft_data.data_guidance.Th_max = 7*3600;
+spacecraft_data.data_guidance.safety_margin = 2*3600;
+spacecraft_data.data_guidance.DeltaT_after_man = 0.3*3600;
+spacecraft_data.data_guidance.r_impact = 24;
+spacecraft_data.data_guidance.r_escape = 100;
+spacecraft_data.data_guidance.scientificFov1 = 8*pi/180;
+spacecraft_data.data_guidance.scientificFov2 = 8*pi/180;
+spacecraft_data.data_guidance.navigationFov1 = 15*pi/180;
+spacecraft_data.data_guidance.navigationFov2 = 15*pi/180;
+spacecraft_data.data_guidance.alpha = [1/3; 1/3; 1/3]; %[mapping; exploitation; navigation]
+spacecraft_data.data_guidance.eta0 = eta0;
+spacecraft_data.data_guidance.sigma_magn = 0.05/3;
+spacecraft_data.data_guidance.sigma_align = 2/3*pi/180;
+
+sigma_magn = 0.05/3;
+sigma_align = 2/3*pi/180;
+
+spacecraft_data.data_asteroids.Faces = F;
+spacecraft_data.data_asteroids.Vertexes = V;
+spacecraft_data.data_asteroids.Normals = N;
+spacecraft_data.data_asteroids.mass = 6.687e15;
+spacecraft_data.data_asteroids.omega = 2*pi/(5.27025547*3600)*[0; 0; 1];
+spacecraft_data.data_asteroids.C20 = C20;
+spacecraft_data.data_asteroids.C22 = C22;
+spacecraft_data.data_asteroids.mapping.known_map = known_map; %known zones
+spacecraft_data.data_asteroids.mapping.incidence = [0, 85]*pi/180; 
+spacecraft_data.data_asteroids.mapping.emission = [0, 85]*pi/180;
+spacecraft_data.data_asteroids.features.score = score;
+spacecraft_data.data_asteroids.features.known_map_features = known_map;
+spacecraft_data.data_asteroids.navigation_features = nav_index;
+
+model_dyn = @(t, x) dynamicsModel(t, x, mass_eros, omega_body, C20, C22);
+truth_dyn = @(t, x) dynamicsTrue(t, x, mass_eros, omega_body);
+
+%% RUN MCTS
+
+iterations = 30; %Number of iterations
+
+%Set up initial condition for the alterning of planning / coasting phases
+spacecraft_data_new = spacecraft_data;
+real_r_start = r0;
+real_v_start = v0;
+plan_r_start = r0;
+plan_v_start = v0;
+eta_start = eta0;
+t_start = t0;
+P_start = P0;
+
+all_trees = {};
+initial_tree = {};
+all_flag = 1;
+real_trajectory = [r0', v0'];
+filter_trajectory = [r0', v0'];
+P_all = P0;
+tt_all = t0;
+
+total_mapping_score = [];
+total_exploiting_score = [];
+total_nav_score = [];
+action_times = [];
+
+alpha = spacecraft_data.data_guidance.alpha;
+for i = 1:iterations
+    %Compute tree search and extract the best path
+    [uu_opt,th_opt,J_opt,U,J,T,S,I] = exploreU([plan_r_start; plan_v_start] , P_start, t_start, spacecraft_data_new);
+    [uu_real, P_man] = pertThrust(uu_opt, sigma_magn, sigma_align);
+
+    [TT_real_cells, XX_real_cells] = compute_trajectory([real_r_start; real_v_start], [t_start, th_opt], uu_real, truth_dyn, options);    
+    %Compute the real trajectory
+    
+    XX_real = [];
+    XX_filter = [];
+    P_filtered = [];
+    TT_real = [];
+    cov_div = P_start;
+    flags = [];
+    y0 = [plan_r_start', plan_v_start'];
+
+    %Compute the estimated trajectory 
+    for j = 1:length(TT_real_cells)
+        y0 = y0 + [zeros(1,3), uu_opt'];
+        cov_div(4:6, 4:6) = cov_div(4:6, 4:6) + P_man;  
+        [P_filtered_parz, XX_filter_parz, eta_f, flag] = navigationFilter(y0, XX_real_cells{j}, cov_div, TT_real_cells{j}, spacecraft_data_new);
+        add_x = XX_real_cells{j};
+        add_t = TT_real_cells{j};
+
+        if j == 1
+            XX_filter = [XX_filter; XX_filter_parz];
+            XX_real = [XX_real; add_x];
+            P_filtered = cat(3, P_filtered, P_filtered_parz);
+            TT_real = [TT_real; add_t];
+            flags = [flags, flag];
+
+        else
+            XX_filter = [XX_filter; XX_filter_parz(2:end, :)];
+            XX_real = [XX_real; add_x(2:end, :)];
+            P_filtered = cat(3, P_filtered, P_filtered_parz(:, :, 2:end));
+            TT_real = [TT_real; add_t(2:end)];
+            flags = [flags, flag(2:end)];
+
+        end
+        cov_div = P_filtered(:, :, end);
+        y0 = XX_filter(end, :);
+        spacecraft_data_new.data_guidance.eta0 = eta_f;
+    end
+
+    P_start(4:6,4:6) = P_start(4:6, 4:6) + P_man;
+    %Perform the real update of the score and asteroid knowledge
+    [J_of_t, dJdt, new_scores_real, new_known_map_real, mapping_score_t, exploit_score_t, nav_score_t] = total_score(XX_filter, TT_real, P_start, spacecraft_data_new);
+    
+    spacecraft_data_new.data_asteroids.features.known_map_features = new_known_map_real;
+    spacecraft_data_new.data_asteroids.mapping.known_map = new_known_map_real;
+    spacecraft_data_new.data_asteroids.features.score = new_scores_real;
+    spacecraft_data_new.data_guidance.eta0 = eta_f;
+    
+    %Add and update scores vector and trajectories for the plot as well as
+    %new conditions for the next iteration
+    if i == 1
+        total_mapping_score = [total_mapping_score; mapping_score_t];
+        total_exploiting_score = [total_exploiting_score; exploit_score_t];
+        total_nav_score = [total_nav_score; nav_score_t];
+    else 
+        total_mapping_score = [total_mapping_score; mapping_score_t(2:end)];
+        total_exploiting_score = [total_exploiting_score; exploit_score_t(2:end)];
+        total_nav_score = [total_nav_score; nav_score_t(2:end)];
+    end
+
+    P_start = reshape(P_filtered(:, :, end), 9, 9);
+    t_start = TT_real(end);
+
+    real_trajectory = [real_trajectory; XX_real(2:end, :)];
+    filter_trajectory = [filter_trajectory; XX_filter(2:end, :)];
+    P_all = cat(3, P_all, P_filtered(:, :, 2:end));
+    tt_all = [tt_all; TT_real(2:end)];
+    all_flag = [all_flag, flags(2:end)];
+
+    real_r_start = XX_real(end, 1:3)';
+    real_v_start = XX_real(end, 4:6)';
+    
+    plan_r_start = XX_filter(end, 1:3)';
+    plan_v_start = XX_filter(end, 4:6)';
+
+    action_times = [action_times, th_opt];
+    
+
+end
+
+%% Plots
+%Plot errori posizione
+figure(1)
+tresig = [];
+error = vecnorm(real_trajectory(:, 1:3)-filter_trajectory(:, 1:3), 2, 2);
+error_plot = plot(( tt_all(1:end)-tt_all(1) )/3600, error, 'b', 'LineWidth',1.5);
+hold on
+for i = 1:size(P_all, 3)
+    tresig = [tresig, 3*sqrt(trace(P_all(1:3, 1:3, i)))];
+    % if all_flag(i) == 1
+    %     xline(( tt_all(i)-tt_all(1) )/3600, 'Color', [207 233 255]/255, 'LineWidth', 0.5);
+    % end
+end
+for i = 1:length(action_times)
+    act = xline( (action_times(i)-tt_all(1) )/3600, 'k--', 'LineWidth', 1);
+end
+tresig_plot = plot(( tt_all(1:end)-tt_all(1) )/3600, tresig, 'g', 'LineWidth',1.5);
+plot(( tt_all(1:end)-tt_all(1) )/3600, -tresig, 'g', 'LineWidth',1.5)
+grid on
+grid minor
+xlabel('Time [h]')
+ylabel('[km]')
+legend([tresig_plot, error_plot, act], '3sigma r', 'error r', 'action')
+
+%Plot errori velocità
+figure(2)
+tresigv = [];
+errorv = vecnorm(real_trajectory(:, 4:6)-filter_trajectory(:, 4:6), 2, 2);
+error_plot = plot(( tt_all(1:end)-tt_all(1) )/3600, errorv*10^3, 'b', 'LineWidth',1.5);
+hold on
+for i = 1:size(P_all, 3)
+    tresigv = [tresigv, 3*sqrt(trace(P_all(4:6, 4:6, i)))];
+    % if all_flag(i) == 1
+    %     xline(( tt_all(i)-tt_all(1) )/3600, 'Color', [207 233 255]/255, 'LineWidth', 0.5);
+    % end
+end
+for i = 1:length(action_times)
+    act = xline( (action_times(i)-tt_all(1) )/3600, 'k--', 'LineWidth', 1);
+end
+tresig_plot = plot(( tt_all(1:end)-tt_all(1) )/3600, tresigv*10^3, 'g', 'LineWidth',1.5);
+plot(( tt_all(1:end)-tt_all(1) )/3600, -tresigv*10^3, 'g', 'LineWidth',1.5)
+grid on
+grid minor
+xlabel('Time [h]')
+ylabel('[m/s]')
+legend([tresig_plot, error_plot, act], '3sigma v', 'error v', 'action')
+
+%Plot Score
+figure(3)
+m = plot(( tt_all(1:end)-tt_all(1) )/3600, cumsum(total_mapping_score*alpha(1)), 'g', 'LineWidth', 1.5);
+hold on
+e = plot(( tt_all(1:end)-tt_all(1) )/3600, cumsum(total_exploiting_score*alpha(2)), 'b', 'LineWidth', 1.5);
+n = plot(( tt_all(1:end)-tt_all(1) )/3600, cumsum(total_nav_score*alpha(3)), 'r', 'LineWidth', 1.5);
+for i = 1:length(action_times)
+    act = xline( (action_times(i)-tt_all(1) )/3600, 'k--', 'LineWidth', 1);
+end
+grid on
+grid minor
+xlabel('Time [h]')
+ylabel('Score [-]')
+legend([m, e, n, act], 'Mapping Score*alpha1', 'Exploit Score*alpha2', 'Navigation Score*alpha3', 'Actions')
+
+%Plot traiettoria in body frame
+figure(4)
+plot3(real_trajectory(:, 1), real_trajectory(:, 2), real_trajectory(:, 3), 'b', 'LineWidth', 1.5)
+hold on
+for i = 1:length(action_times)
+    pos = find(tt_all == action_times(i));
+    man = plot3(real_trajectory(pos, 1), real_trajectory(pos, 2), real_trajectory(pos, 3), 'b.', 'MarkerSize', 15);
+end
+plotEllipsoidWithKnownRegion(F, V, new_scores_real, new_known_map_real)
+grid on
+grid minor
+xlabel('X [km]')
+zlabel('Z [km]')
+ylabel('Y [km]')
+legend(man, 'Manoeuvring Point')
+
+%Plot traiettoria in inertial
+figure(5)
+trajectory_in = zeros(size(real_trajectory(:, 1:3)));
+for i = 1:length(tt_all)
+    R_body2in = cspice_pxform('IAU_EROS', 'ECLIPJ2000', tt_all(i)); 
+    trajectory_in(i, :) = (R_body2in*real_trajectory(i, 1:3)')';
+end
+plotEllipsoidWithKnownRegion(F, V, score, new_known_map_real);
+plot3(trajectory_in(:, 1), trajectory_in(:, 2), trajectory_in(:, 3), 'b', 'LineWidth', 1.5)
+hold on
+for i = 1:length(action_times)
+    pos = find(tt_all == action_times(i));
+    man = plot3(trajectory_in(pos, 1), trajectory_in(pos, 2), trajectory_in(pos, 3), 'b.', 'MarkerSize', 15);
+end
+%plotSunPointingVector(tt_all, 'ECLIPJ2000')
+title('Trajectory in ECLIPJ2000')
+grid on
+grid minor
+xlabel('X [km]')
+zlabel('Z [km]')
+ylabel('Y [km]')
+legend(man, 'Manoeuvring Point')
+
+%Plot det P adimensionalized
+figure(6)
+DU = 40;
+TU = sqrt( DU^3/(astroConstants(1)*spacecraft_data.data_asteroids.mass) );
+VU = DU/TU + omega_body(3)*DU;
+
+dets = zeros(size(P_all, 3), 1);
+for i = 1:size(P_all, 3)
+    P_adim = zeros(size(P0(1:6, 1:6)));
+    P_adim(1:3, 1:3) = P_all(1:3, 1:3, i)/(DU*DU);
+    P_adim(4:6, 1:3) = P_all(4:6, 1:3, i)/(DU*VU);
+    P_adim(1:3, 4:6) = P_all(1:3, 4:6, i)/(DU*VU);
+    P_adim(4:6, 4:6) = P_all(4:6, 4:6, i)/(VU*VU);
+    dets(i) = log10(det(P_adim));
+end
+semilogy(( tt_all(1:end)-tt_all(1) )/3600, dets, 'g', 'LineWidth',1.5)
+hold on
+for i = 1:length(action_times)
+    act = xline( (action_times(i)-tt_all(1) )/3600, 'k--', 'LineWidth', 1);
+end
+grid on
+grid minor
+xlabel('Time [h]')
+ylabel('log10det [-]')
+
