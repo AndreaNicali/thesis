@@ -19,6 +19,14 @@ measurements.val = pert_meas;
 %reshape trajectory for consistency
 y_truth = reshape(y_truth, [length(tt), 6]);
 
+if sigma_meas == 0
+    xx_filtered = y_truth;
+    P_filtered = zeros(6);
+    eta_f = 0;
+    flag = 0;
+    return;
+end
+
 eta_start = spacecraft_data.data_guidance.eta0;
 [xx_out, Pp, flag] = EKF(y0, tt, measurements, P0, spacecraft_data, sigma_meas, sigma_acc, y_truth);
 xx_filtered = xx_out(:, 1:6);

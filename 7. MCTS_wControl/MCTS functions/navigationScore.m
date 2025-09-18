@@ -1,5 +1,11 @@
 function [nav_score] = navigationScore(y, P0, t, spacecraft_data)
 
+sigma_meas = spacecraft_data.data_guidance.measurement_noise;
+if sigma_meas == 0
+    nav_score = zeros(size(t));
+    return;
+end
+
 omega = spacecraft_data.data_asteroids.omega(3);
 minLandToScore = spacecraft_data.data_guidance.minLandmToScore;
 DU = spacecraft_data.data_guidance.DU;
