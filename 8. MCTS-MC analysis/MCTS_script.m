@@ -20,14 +20,40 @@ options = odeset('reltol', 1e-12, 'abstol', [ones(3,1)*1e-8; ones(3,1)*1e-11]);
 %Initial Conditions
 t0 = cspice_str2et('2000-08-01 T01:00:00');
 
-r0 = [8.5855;   44.6428;   -4.4817]; %km
-v0 = [0.0164;   -0.0032;    0.0018]; %km/s
-eta0 = zeros(1, 3);
-
-%Data for body frame propagation
+%Create initial conditions
 T_rotation_eros = 5.27025547*3600; %s
 omega_body = 2*pi/T_rotation_eros*[0; 0; 1]; %rad/s
 mass_eros = 6.687e15; %kg
+mu = astroConstants(1)*mass_eros;
+kep = [45, 0, 0, 0, 0, 0];
+[r,v] = kep2car(kep, mu);
+x0 = [r(:); v(:)];
+E  = 0.5*dot(v,v) - mu/norm(r);
+a  = -mu/(2*E);
+T  = 2*pi*sqrt(a^3/mu);
+dynkep = @(t,x)[x(4:6); -mu*x(1:3)/norm(x(1:3))^3];
+ts  = linspace(t0, t0+T, 100);
+[tt, xx] = ode113(dynkep, ts, x0, options);
+pos = xx(:,1:3);
+N = size(pos,1); V = zeros(N,3);
+inc = linspace(-pi/2,pi/2,N)';
+for k = 1:N
+    OM = atan2(pos(k, 2), pos(k, 1));
+    [r, v] = kep2car([45, 0, inc(k), OM, 0, 0], mu);
+    vel(:, k) = v(:); 
+    x0 = [pos(k, :)';v];
+    [tt, xx] = ode113(dynkep, ts, x0, options);
+    %plot3(xx(:, 1), xx(:, 2), xx(:, 3), 'LineWidth', 0.3)
+    plot3(pos(:, 1), pos(:, 2), pos(:, 3), 'b.', 'MarkerSize', 10)
+    hold on
+quiver3(pos(k,1), pos(k,2), pos(k,3), v(1)*2000, v(2)*2000, v(3)*2000, ...
+        'AutoScale','off', 'Color','r', 'LineWidth',1.5);
+end
+plotEros
+%%
+r0 = [8.5855;   44.6428;   -4.4817]; %km
+v0 = [0.0164;   -0.0032;    0.0018]; %km/s
+eta0 = zeros(1, 3);
 
 % Semiaxis (in km) of the asteroid model 
 a = 20.591;
@@ -161,6 +187,7 @@ load('sigma_align_precomputed.mat');
 load('sigma_meas_precomputed.mat');
 load('theta_precomputed.mat');
 n_run = 100; %Max 100
+rng('default');
 
 for i = 1:n_run
     spacecraft_data.MC.pert_magn = sigma_magn_pre(i, :);
@@ -170,19 +197,18 @@ for i = 1:n_run
     spacecraft_data.MC.pert_meas = sigma_meas_pre(i, :);
     spacecraft_data.MC.iter_meas = 1;
 
-end
-iterations = 250; %Number of iterations per tree (As a reference, for 200 iterations 45 min/1 h are required)
-n_trees = 4; %Number of trees
+    iterations = 50; %Number of iterations per tree (As a reference, for 200 iterations 45 min/1 h are required)
+    n_trees = 2; %Number of trees
 
-profile clear
-profile on
-[all_trees, real_trajectory_MCTS, filter_trajectory_MCTS, ref_trajectory_MCTS, P_all_MCTS, real_times_MCTS, ...
- mapping_scores_MCTS, exploiting_scores_MCTS, nav_scores_MCTS, action_times_MCTS, all_flag_MCTS, planned_actions_MCTS, ...
- real_trajectory_total_MCTS, ref_trajectory_total_MCTS, filter_trajectory_total_MCTS, tt_all_MCTS, ...
- mapping_score_total_MCTS, exploiting_score_total_MCTS, nav_score_total_MCTS, P_total_MCTS, spacecraft_data_out_MCTS, correction1, correction2, actual_maneuvres]= ...
-    runMCTSBatch(spacecraft_data, r0, v0, t0, P0, iterations, n_trees, options);
-profile off
-profile viewer
+    [all_trees, real_trajectory_MCTS, filter_trajectory_MCTS, ref_trajectory_MCTS, P_all_MCTS, real_times_MCTS, ...
+     mapping_scores_MCTS, exploiting_scores_MCTS, nav_scores_MCTS, action_times_MCTS, all_flag_MCTS, planned_actions_MCTS, ...
+     real_trajectory_total_MCTS, ref_trajectory_total_MCTS, filter_trajectory_total_MCTS, tt_all_MCTS, ...
+     mapping_score_total_MCTS, exploiting_score_total_MCTS, nav_score_total_MCTS, P_total_MCTS, spacecraft_data_out_MCTS, correction1, correction2, actual_maneuvres]= ...
+        runMCTSBatch(spacecraft_data, r0, v0, t0, P0, iterations, n_trees, options);
+    
+    all_trees
+end
+
 
 %%
 % [real_trajectory_MCTS, filter_trajectory_MCTS, P_all_MCTS, tt_all_MCTS, ...
@@ -556,3 +582,5 @@ grid on
 grid minor
 yline((spacecraft_data.data_guidance.Th_max-spacecraft_data.data_guidance.safety_margin)/3600, '--', 'LineWidth', 1.5)
 yline(spacecraft_data.data_guidance.DeltaT_after_man/3600, '--', 'LineWidth', 1.5)
+
+

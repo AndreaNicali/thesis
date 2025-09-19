@@ -4,9 +4,9 @@ uu_mag = norm(u_nom);
 R_t2b = thrust2body(u_nom);
 
 if sigma_magn == 0
-    m_err = mvnrnd(0, sigma_magn^2);
-    alpha_err = mvnrnd(0, sigma_align^2);
-    theta_err = -pi + 2*pi*rand(1);
+    m_err = 0;
+    alpha_err = 0;
+    theta_err = 0;
 else
     m_err = err_magn;
     alpha_err = err_align;
