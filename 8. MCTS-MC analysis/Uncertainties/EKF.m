@@ -1,0 +1,136 @@
+function [xx_filtered, P_filtered, flag] = EKF(x0, tt, measurements, P0, spacecraft_data, sigma_meas, sigma_acc, xx_true)
+
+C20 = spacecraft_data.data_asteroids.C20;
+C22 = spacecraft_data.data_asteroids.C22;
+
+mass_eros = spacecraft_data.data_asteroids.mass;
+omega_body = spacecraft_data.data_asteroids.omega;
+minLand = spacecraft_data.data_guidance.minLandmToScore;
+
+options = odeset('reltol', 1e-12, 'abstol', [ones(3,1)*1e-8; ones(3,1)*1e-11]);
+xx_filtered = zeros(length(tt), 6);
+P_filtered = zeros(6, 6, length(tt));
+xx_filtered(1, :) = x0;
+P_filtered(:, :, 1) = P0;
+
+x_start = x0;
+P_start = P0;
+flag = [];
+
+for i = 1:(length(tt)-1)
+    tao = tt(i+1)-tt(i);
+    q11 = (1/4)*tao^4;
+    q12 = (1/2)*tao^3;
+    q22 = tao^2;
+
+    Qk = sigma_acc^2 * [ ...
+    q11, 0,   0,   q12, 0,   0;
+    0,   q11, 0,   0,   q12, 0;
+    0,   0,   q11, 0,   0,   q12;
+    q12, 0,   0,   q22, 0,   0;
+    0,   q12, 0,   0,   q22, 0;
+    0,   0,   q12, 0,   0,   q22];
+    
+    meas_t = measurements.time == tt(i+1);
+    meas = measurements.val(:, meas_t);
+
+    [~, xx, PHI]  = propagateModel(x_start', [tt(i), tt(i+1)], mass_eros, omega_body, C20, C22);
+    
+    % delta = [x_start(1)*10^-8, x_start(2)*10^-8, x_start(3)*10^-8, 10^-8, 10^-8, 10^-8];
+    % eps_pert = diag(delta);
+    % perturbed_states = [x_start', x_start', x_start', x_start', x_start', x_start']+eps_pert;
+    % 
+    % perturbed_prop = zeros(size(perturbed_states));
+    % PHI_num = zeros(6,6);
+    % 
+    % for j = 1:6
+    %     [~, xx_p, PHI]  = propagateEllipsoid(perturbed_states(:, j), [tt(i), tt(i+1)], mass_eros, omega_body, C20, C22);
+    %     perturbed_prop(:, j) = xx_p(end, :)';
+    % 
+    %     PHI_num(:, j) = ( perturbed_prop(:, j)-xx(end, :)' )/delta(j);
+    % end
+    % PHI = PHI_num;
+
+    sim_measurements = measurementsFun(xx(end,:), tt(i+1), spacecraft_data);
+    sim_meas_t = sim_measurements.time == tt(i+1);
+    sim_meas = sim_measurements.val(:, sim_meas_t);
+
+    % if any(size(sim_meas)~=size(meas))
+        sim_features = sim_measurements.feature(sim_meas_t);
+        real_features = measurements.feature(meas_t);
+        [comm, ia, ib] = intersect(sim_features, real_features, 'stable');
+
+        sim_meas = sim_meas(:, ia);
+        meas = meas(:, ib);
+        sim_meas_t = false(size(sim_meas_t));
+        sim_meas_t(ia) = true;
+
+    % end
+
+    sim_meas = sim_meas(:);
+    meas = meas(:);
+
+    los_meas = sim_measurements.los(:, sim_meas_t);
+
+    [H, R] = measurementsMatrix(los_meas, sigma_meas);
+
+    xxkplus1 = xx(end, :);
+    Pkplus1 = PHI*P_start*PHI' + Qk;
+
+   if length(meas) < 2*minLand
+       xx_filtered(i+1,:) = xxkplus1;
+       P_filtered(:, :, i+1) = Pkplus1;
+       x_start = xxkplus1;
+       P_start = Pkplus1;
+       flag = [flag, 0];
+       continue
+   end
+
+    bkplus1 = wrapToPi(meas - sim_meas);
+
+    Kkplus1 = Pkplus1*H'/(H*Pkplus1*H'+ R);
+
+    P_upd = Pkplus1-Kkplus1*H*Pkplus1;
+    xx_upd = xxkplus1' + Kkplus1*bkplus1;
+    
+    xx_filtered(i+1, :) = xx_upd';
+    P_filtered(:, :, i+1) = P_upd;
+
+    err = norm(xx_filtered(i+1, 1:3) - xx_true(i+1, 1:3)); 
+    if err > 3*sqrt(trace(P_filtered(1:3, 1:3, i+1)))
+        a = 1;
+    end
+
+    flag = [flag, 1];
+    x_start = xx_upd';
+    P_start = P_upd;
+
+end
+
+   
+end
+
+
+function [H, R] = measurementsMatrix(los_meas, sigma_meas)
+
+N = size(los_meas, 2);   % numero di misure
+H = zeros(2*N, 6);
+
+for i = 1:N
+    rho = norm(los_meas(:, i));
+    rhox = los_meas(1,i)/rho;
+    rhoy = los_meas(2,i)/rho;
+    rhoz = los_meas(3,i)/rho;
+    
+    % Jacobiano 2x3 rispetto alla posizione
+    J = [ 1/sqrt(1-rhoz^2)*rhox*rhoz/rho,   1/sqrt(1-rhoz^2)*rhoy*rhoz/rho,  1/sqrt(1-rhoz^2)*(-1+rhoz^2)/rho; 
+        1/(1+(rhoy/rhox)^2)*rhoy/(rhox^2*rho),  -1/(1+(rhoy/rhox)^2)*1/(rhox*rho),  0 ];
+    
+    H(2*(i-1)+1 : 2*i, 1:3) = J;
+end
+
+% Covarianza misure
+R = sigma_meas^2 * eye(2*N);
+
+end
+
