@@ -124,39 +124,39 @@ P0(1:3, 1:3) = eye(3)*sigma_pos^2;
 P0(4:6, 4:6) = eye(3)*sigma_vel^2;
 %P0(7:9, 7:9) = eye(3)*sigma_eta^2;
 
-%SETUP 2: DYNAMIC UNCERTAINTIES
-% spacecraft_data.data_guidance.modelDynamics = @(t, x) dynamicsModel(t, x, mass_eros, omega_body, C20, C22);
-% spacecraft_data.data_guidance.trueDynamics = @(t, x) dynamicsTrue(t, x, mass_eros, omega_body);
-% spacecraft_data.data_guidance.sigma_magn = 0;
-% spacecraft_data.data_guidance.sigma_align = 0;
-% spacecraft_data.data_guidance.process_noise = 5*10^-9;
-% spacecraft_data.data_guidance.measurement_noise = sqrt( (100/3600*pi/180)^2 + (100/3600*pi/180)^2 ) ;
-% sigma_pos = 0.01; %km
-% sigma_vel = 0.01*10^-3; %km/s
-% sigma_eta = 10^(-12);
-% P0 = zeros(6);
-% P0(1:3, 1:3) = eye(3)*sigma_pos^2;
-% P0(4:6, 4:6) = eye(3)*sigma_vel^2;
-% %P0(7:9, 7:9) = eye(3)*sigma_eta^2;
+%SETUP 2: NAVIGATION UNCERTAINTIES+CONTROL UNCERTAINTIES
+spacecraft_data.data_guidance.modelDynamics = @(t, x) dynamicsModel(t, x, mass_eros, omega_body, C20, C22);
+spacecraft_data.data_guidance.trueDynamics = @(t, x) dynamicsModel(t, x, mass_eros, omega_body, C20, C22);
+spacecraft_data.data_guidance.sigma_magn =  0.05/3;
+spacecraft_data.data_guidance.sigma_align = 2/3*pi/180;
+spacecraft_data.data_guidance.process_noise = 0;
+spacecraft_data.data_guidance.measurement_noise = sqrt( (100/3600*pi/180)^2 + (100/3600*pi/180)^2 ) ;
+sigma_pos = 0.01; %km
+sigma_vel = 0.01*10^-3; %km/s
+sigma_eta = 10^(-12);
+P0 = zeros(6);
+P0(1:3, 1:3) = eye(3)*sigma_pos^2;
+P0(4:6, 4:6) = eye(3)*sigma_vel^2;
+%P0(7:9, 7:9) = eye(3)*sigma_eta^2;
 
 %SETUP 3: DYN + CONTROL UNCERTAINTIES
-% spacecraft_data.data_guidance.modelDynamics = @(t, x) dynamicsModel(t, x, mass_eros, omega_body, C20, C22);
-% spacecraft_data.data_guidance.trueDynamics = @(t, x) dynamicsTrue(t, x, mass_eros, omega_body);
-% spacecraft_data.data_guidance.sigma_magn = 0.05/3;
-% spacecraft_data.data_guidance.sigma_align = 2/3*pi/180;
-% spacecraft_data.data_guidance.process_noise = 5*10^-9;
-% spacecraft_data.data_guidance.measurement_noise = sqrt( (100/3600*pi/180)^2 + (100/3600*pi/180)^2 ) ;
-% sigma_pos = 0.01; %km
-% sigma_vel = 0.01*10^-3; %km/s
-% sigma_eta = 10^(-12);
-% P0 = zeros(6);
-% P0(1:3, 1:3) = eye(3)*sigma_pos^2;
-% P0(4:6, 4:6) = eye(3)*sigma_vel^2;
+spacecraft_data.data_guidance.modelDynamics = @(t, x) dynamicsModel(t, x, mass_eros, omega_body, C20, C22);
+spacecraft_data.data_guidance.trueDynamics = @(t, x) dynamicsTrue(t, x, mass_eros, omega_body);
+spacecraft_data.data_guidance.sigma_magn = 0.05/3;
+spacecraft_data.data_guidance.sigma_align = 2/3*pi/180;
+spacecraft_data.data_guidance.process_noise = 5*10^-9;
+spacecraft_data.data_guidance.measurement_noise = sqrt( (100/3600*pi/180)^2 + (100/3600*pi/180)^2 ) ;
+sigma_pos = 0.01; %km
+sigma_vel = 0.01*10^-3; %km/s
+sigma_eta = 10^(-12);
+P0 = zeros(6);
+P0(1:3, 1:3) = eye(3)*sigma_pos^2;
+P0(4:6, 4:6) = eye(3)*sigma_vel^2;
 % %P0(7:9, 7:9) = eye(3)*sigma_eta^2;
 
 %% RUN MCTS
 
-iterations = 200; %Number of iterations per tree (As a reference, for 200 iterations 45 min/1 h are required)
+iterations = 250; %Number of iterations per tree (As a reference, for 200 iterations 45 min/1 h are required)
 n_trees = 4; %Number of trees
 
 profile clear
@@ -164,7 +164,7 @@ profile on
 [all_trees, real_trajectory_MCTS, filter_trajectory_MCTS, ref_trajectory_MCTS, P_all_MCTS, real_times_MCTS, ...
  mapping_scores_MCTS, exploiting_scores_MCTS, nav_scores_MCTS, action_times_MCTS, all_flag_MCTS, planned_actions_MCTS, ...
  real_trajectory_total_MCTS, ref_trajectory_total_MCTS, filter_trajectory_total_MCTS, tt_all_MCTS, ...
- mapping_score_total_MCTS, exploiting_score_total_MCTS, nav_score_total_MCTS, P_total_MCTS, spacecraft_data_out_MCTS, correction1, correction2]= ...
+ mapping_score_total_MCTS, exploiting_score_total_MCTS, nav_score_total_MCTS, P_total_MCTS, spacecraft_data_out_MCTS, correction1, correction2, actual_maneuvres]= ...
     runMCTSBatch(spacecraft_data, r0, v0, t0, P0, iterations, n_trees, options);
 profile off
 profile viewer
@@ -199,6 +199,15 @@ final_known_map_MCTS = spacecraft_data_out_MCTS.data_asteroids.mapping.known_map
 final_scores_GREEDY = spacecraft_data_out_GREEDY.data_asteroids.features.score;
 final_known_map_GREEDY = spacecraft_data_out_GREEDY.data_asteroids.mapping.known_map;
 
+action_times_list_MCTS = [];
+action_times_list_GREEDY = [];
+for i = 1:size(action_times_GREEDY, 1)
+    action_times_list_MCTS = [action_times_list_MCTS, cell2mat(action_times_MCTS(i, :))];
+    action_times_list_GREEDY = [action_times_list_GREEDY, cell2mat(action_times_GREEDY(i, :))];
+end
+action_times_list_GREEDY = action_times_list_GREEDY(action_times_list_GREEDY>0);
+action_times_list_MCTS = action_times_list_MCTS(action_times_list_MCTS>0);
+
 figure(1)
 subplot(1,2,1)
 tresig = [];
@@ -208,9 +217,9 @@ hold on
 for i = 1:size(P_total_MCTS, 3)
     tresig = [tresig, 3*sqrt(trace(P_total_MCTS(1:3, 1:3, i)))];
 end
-% for i = 1:length(action_times_MCTS)
-%     act = xline( (action_times_MCTS(i)-tt_all_MCTS(1) )/3600, 'k--', 'LineWidth', 1);
-% end
+for i = 1:length(action_times_list_MCTS)
+    act = xline( (action_times_list_MCTS(i)-tt_all_MCTS(1) )/3600, 'k--', 'LineWidth', 1);
+end
 tresig_plot = plot(( tt_all_MCTS(1:end)-tt_all_MCTS(1) )/3600, tresig, 'g', 'LineWidth',1.5);
 plot(( tt_all_MCTS(1:end)-tt_all_MCTS(1) )/3600, -tresig, 'g', 'LineWidth',1.5)
 grid on
@@ -228,9 +237,9 @@ hold on
 for i = 1:size(P_total_GREEDY, 3)
     tresig = [tresig, 3*sqrt(trace(P_total_GREEDY(1:3, 1:3, i)))];
 end
-% for i = 1:length(action_times_GREEDY)
-%     act = xline( (action_times_GREEDY(i)-tt_all_GREEDY(1) )/3600, 'k--', 'LineWidth', 1);
-% end
+for i = 1:length(action_times_list_GREEDY)
+    act = xline( (action_times_list_GREEDY(i)-tt_all_GREEDY(1) )/3600, 'k--', 'LineWidth', 1);
+end
 tresig_plot = plot(( tt_all_GREEDY(1:end)-tt_all_GREEDY(1) )/3600, tresig, 'g', 'LineWidth',1.5);
 plot(( tt_all_GREEDY(1:end)-tt_all_GREEDY(1) )/3600, -tresig, 'g', 'LineWidth',1.5)
 grid on
@@ -251,9 +260,9 @@ hold on
 for i = 1:size(P_total_MCTS, 3)
     tresigv = [tresigv, 3*sqrt(trace(P_total_MCTS(4:6, 4:6, i)))];
 end
-% for i = 1:length(action_times_MCTS)
-%     act = xline( (action_times_MCTS(i)-tt_all_MCTS(1) )/3600, 'k--', 'LineWidth', 1);
-% end
+for i = 1:length(action_times_list_MCTS)
+    act = xline( (action_times_list_MCTS(i)-tt_all_MCTS(1) )/3600, 'k--', 'LineWidth', 1);
+end
 tresig_plot = plot(( tt_all_MCTS(1:end)-tt_all_MCTS(1) )/3600, tresigv*10^3, 'g', 'LineWidth',1.5);
 plot(( tt_all_MCTS(1:end)-tt_all_MCTS(1) )/3600, -tresigv*10^3, 'g', 'LineWidth',1.5)
 grid on
@@ -272,9 +281,9 @@ hold on
 for i = 1:size(P_total_GREEDY, 3)
     tresigv = [tresigv, 3*sqrt(trace(P_total_GREEDY(4:6, 4:6, i)))];
 end
-% for i = 1:length(action_times_GREEDY)
-%     act = xline( (action_times_GREEDY(i)-tt_all_GREEDY(1) )/3600, 'k--', 'LineWidth', 1);
-% end
+for i = 1:length(action_times_list_GREEDY)
+    act = xline( (action_times_list_GREEDY(i)-tt_all_GREEDY(1) )/3600, 'k--', 'LineWidth', 1);
+end
 tresig_plot = plot(( tt_all_GREEDY(1:end)-tt_all_GREEDY(1) )/3600, tresigv*10^3, 'g', 'LineWidth',1.5);
 plot(( tt_all_GREEDY(1:end)-tt_all_GREEDY(1) )/3600, -tresigv*10^3, 'g', 'LineWidth',1.5)
 grid on
@@ -301,14 +310,13 @@ m = plot(( tt_all_MCTS(1:end)-tt_all_MCTS(1) )/3600, m_MCTS, 'g', 'LineWidth', 1
 hold on
 e = plot(( tt_all_MCTS(1:end)-tt_all_MCTS(1) )/3600, e_MCTS, 'b', 'LineWidth', 1.5);
 n = plot(( tt_all_MCTS(1:end)-tt_all_MCTS(1) )/3600, n_MCTS, 'r', 'LineWidth', 1.5);
-% for i = 1:length(action_times_MCTS)
-%     act = xline( (action_times_MCTS(i)-tt_all_MCTS(1) )/3600, 'k--', 'LineWidth', 1);
-% end
+for i = 1:length(action_times_list_MCTS)
+    act = xline( (action_times_list_MCTS(i)-tt_all_MCTS(1) )/3600, 'k--', 'LineWidth', 1);
+end
 grid on
 grid minor
 xlabel('Time [h]')
 ylabel('Score [-]')
-ylim([ymin_all ymax_all])
 legend([m, e, n], 'Mapping Score*alpha1', 'Exploit Score*alpha2', 'Navigation Score*alpha3')
 title('MCTS')
 
@@ -317,14 +325,13 @@ m = plot(( tt_all_GREEDY(1:end)-tt_all_GREEDY(1) )/3600, m_GREEDY, 'g', 'LineWid
 hold on
 e = plot(( tt_all_GREEDY(1:end)-tt_all_GREEDY(1) )/3600, e_GREEDY, 'b', 'LineWidth', 1.5);
 n = plot(( tt_all_GREEDY(1:end)-tt_all_GREEDY(1) )/3600, n_GREEDY, 'r', 'LineWidth', 1.5);
-% for i = 1:length(action_times_GREEDY)
-%     act = xline( (action_times_GREEDY(i)-tt_all_GREEDY(1) )/3600, 'k--', 'LineWidth', 1);
-% end
+for i = 1:length(action_times_list_GREEDY)
+    act = xline( (action_times_list_GREEDY(i)-tt_all_GREEDY(1) )/3600, 'k--', 'LineWidth', 1);
+end
 grid on
 grid minor
 xlabel('Time [h]')
 ylabel('Score [-]')
-%ylim([ymin_all ymax_all])
 legend([m, e, n], 'Mapping Score*alpha1', 'Exploit Score*alpha2', 'Navigation Score*alpha3')
 title('GREEDY')
 
@@ -332,62 +339,59 @@ figure(12)
 subplot(1,2,1)
 m = plot(( tt_all_MCTS(1:end)-tt_all_MCTS(1) )/3600, m_MCTS+e_MCTS+n_MCTS, 'g', 'LineWidth', 1.5);
 hold on
-% for i = 1:length(action_times_MCTS)
-%     act = xline( (action_times_MCTS(i)-tt_all_MCTS(1) )/3600, 'k--', 'LineWidth', 1);
-% end
+for i = 1:length(action_times_list_MCTS)
+    act = xline( (action_times_list_MCTS(i)-tt_all_MCTS(1) )/3600, 'k--', 'LineWidth', 1);
+end
 grid on
 grid minor
 xlabel('Time [h]')
 ylabel('Score [-]')
-ylim([ymin_all ymax_all])
 title('MCTS')
+
 subplot(1,2,2)
-m = plot(( tt_all_GREEDY(1:end)-tt_all_GREEDY(1) )/3600, m_GREEDY, 'g', 'LineWidth', 1.5);
+m = plot(( tt_all_GREEDY(1:end)-tt_all_GREEDY(1) )/3600, m_GREEDY+e_GREEDY+n_GREEDY, 'g', 'LineWidth', 1.5);
 hold on
-e = plot(( tt_all_GREEDY(1:end)-tt_all_GREEDY(1) )/3600, e_GREEDY, 'b', 'LineWidth', 1.5);
-n = plot(( tt_all_GREEDY(1:end)-tt_all_GREEDY(1) )/3600, n_GREEDY, 'r', 'LineWidth', 1.5);
-% for i = 1:length(action_times_GREEDY)
-%     act = xline( (action_times_GREEDY(i)-tt_all_GREEDY(1) )/3600, 'k--', 'LineWidth', 1);
-% end
+for i = 1:length(action_times_list_GREEDY)
+    act = xline( (action_times_list_GREEDY(i)-tt_all_GREEDY(1) )/3600, 'k--', 'LineWidth', 1);
+end
 grid on
 grid minor
 xlabel('Time [h]')
 ylabel('Score [-]')
-%ylim([ymin_all ymax_all])
-legend([m, e, n], 'Mapping Score*alpha1', 'Exploit Score*alpha2', 'Navigation Score*alpha3')
 title('GREEDY')
+
 %Plot traiettoria in body frame
 figure(4)
 subplot(1,2,1)
 plot3(real_trajectory_total_MCTS(:, 1), real_trajectory_total_MCTS(:, 2), real_trajectory_total_MCTS(:, 3), 'b', 'LineWidth', 1.5)
 hold on
-% for i = 1:length(action_times_MCTS)
-%     pos = find(abs(tt_all_MCTS - action_times_MCTS(i)) < 1e-9, 1, 'first');
-%     man_MCTS = plot3(real_trajectory_MCTS(pos, 1), real_trajectory_MCTS(pos, 2), real_trajectory_MCTS(pos, 3), 'b.', 'MarkerSize', 15);
-% end
+for i = 1:length(action_times_list_MCTS)
+    pos = find(abs(tt_all_MCTS - action_times_list_MCTS(i)) < 1e-9, 1, 'first');
+    man_MCTS = plot3(real_trajectory_total_MCTS(pos, 1), real_trajectory_total_MCTS(pos, 2), real_trajectory_total_MCTS(pos, 3), 'b.', 'MarkerSize', 15);
+end
 plotEllipsoidWithKnownRegion(F, V, final_scores_MCTS, final_known_map_MCTS)
 grid on
 grid minor
 xlabel('X [km]')
 zlabel('Z [km]')
 ylabel('Y [km]')
-%legend(man_MCTS, 'Manoeuvring Point')
+legend(man_MCTS, 'Manoeuvring Point')
 title('MCTS')
 
 subplot(1,2,2)
 plot3(real_trajectory_total_GREEDY(:, 1), real_trajectory_total_GREEDY(:, 2), real_trajectory_total_GREEDY(:, 3), 'b', 'LineWidth', 1.5)
 hold on
-% for i = 1:length(action_times_GREEDY)
-%     pos = find(abs(tt_all_GREEDY - action_times_GREEDY(i)) < 1e-9, 1, 'first');
-%     man_GREEDY = plot3(real_trajectory_GREEDY(pos, 1), real_trajectory_GREEDY(pos, 2), real_trajectory_GREEDY(pos, 3), 'b.', 'MarkerSize', 15);
-% end
+for i = 1:length(action_times_list_GREEDY)
+    pos = find(abs(tt_all_GREEDY - action_times_list_GREEDY(i)) < 1e-9, 1, 'first');
+    man_GREEDY = plot3(real_trajectory_total_GREEDY(pos, 1), real_trajectory_total_GREEDY(pos, 2), real_trajectory_total_GREEDY(pos, 3), 'b.', 'MarkerSize', 15);
+end
 plotEllipsoidWithKnownRegion(F, V, final_scores_GREEDY, final_known_map_GREEDY)
 grid on
 grid minor
 xlabel('X [km]')
 zlabel('Z [km]')
 ylabel('Y [km]')
-%legend(man_GREEDY, 'Manoeuvring Point')
+legend(man_GREEDY, 'Manoeuvring Point')
 title('GREEDY')
 
 %Plot traiettoria in inertial
@@ -407,33 +411,33 @@ subplot(1,2,1)
 plotEllipsoidWithKnownRegion(F, V, final_scores_MCTS, final_known_map_MCTS);
 plot3(trajectory_in_MCTS(:, 1), trajectory_in_MCTS(:, 2), trajectory_in_MCTS(:, 3), 'b', 'LineWidth', 1.5)
 hold on
-% for i = 1:length(action_times_MCTS)
-%     pos = find(abs(tt_all_MCTS - action_times_MCTS(i)) < 1e-9, 1, 'first');
-%     man_MCTS = plot3(trajectory_in_MCTS(pos, 1), trajectory_in_MCTS(pos, 2), trajectory_in_MCTS(pos, 3), 'b.', 'MarkerSize', 15);
-% end
+for i = 1:length(action_times_list_MCTS)
+    pos = find(abs(tt_all_MCTS - action_times_list_MCTS(i)) < 1e-9, 1, 'first');
+    man_MCTS = plot3(trajectory_in_MCTS(pos, 1), trajectory_in_MCTS(pos, 2), trajectory_in_MCTS(pos, 3), 'b.', 'MarkerSize', 15);
+end
 title('Trajectory in ECLIPJ2000 - MCTS')
 grid on
 grid minor
 xlabel('X [km]')
 zlabel('Z [km]')
 ylabel('Y [km]')
-%legend(man_MCTS, 'Manoeuvring Point')
+legend(man_MCTS, 'Manoeuvring Point')
 
 subplot(1,2,2)
 plotEllipsoidWithKnownRegion(F, V, final_scores_GREEDY, final_known_map_GREEDY);
 plot3(trajectory_in_GREEDY(:, 1), trajectory_in_GREEDY(:, 2), trajectory_in_GREEDY(:, 3), 'b', 'LineWidth', 1.5)
 hold on
-% for i = 1:length(action_times_GREEDY)
-%     pos = find(abs(tt_all_GREEDY - action_times_GREEDY(i)) < 1e-9, 1, 'first');
-%     man_GREEDY = plot3(trajectory_in_GREEDY(pos, 1), trajectory_in_GREEDY(pos, 2), trajectory_in_GREEDY(pos, 3), 'b.', 'MarkerSize', 15);
-% end
+for i = 1:length(action_times_list_GREEDY)
+    pos = find(abs(tt_all_GREEDY - action_times_list_GREEDY(i)) < 1e-9, 1, 'first');
+    man_GREEDY = plot3(trajectory_in_GREEDY(pos, 1), trajectory_in_GREEDY(pos, 2), trajectory_in_GREEDY(pos, 3), 'b.', 'MarkerSize', 15);
+end
 title('Trajectory in ECLIPJ2000 - GREEDY')
 grid on
 grid minor
 xlabel('X [km]')
 zlabel('Z [km]')
 ylabel('Y [km]')
-%legend(man_GREEDY, 'Manoeuvring Point')
+legend(man_GREEDY, 'Manoeuvring Point')
 
 %Plot errori velocità
 % figure(6)
@@ -489,22 +493,6 @@ ylabel('Y [km]')
 % legend([deter_plot, act], 'log10(det(P)) [-]', 'action')
 % title('GREEDY')
 
-
-%Confronto dispersion e knowledge
-figure(7)
-dispersion_pos = vecnorm(ref_trajectory_total_GREEDY(:, 1:3)-real_trajectory_total_GREEDY(:, 1:3), 2, 2);
-knowledge_pos = vecnorm(filter_trajectory_total_GREEDY(:, 1:3)-real_trajectory_total_GREEDY(:, 1:3), 2, 2);
-
-dispe = plot((tt_all_GREEDY-tt_all_GREEDY(1))/3600, dispersion_pos, 'r', 'LineWidth', 1.5)
-hold on
-knowl = plot((tt_all_GREEDY-tt_all_GREEDY(1))/3600, knowledge_pos, 'b', 'LineWidth', 1.5)
-grid on
-grid minor
-xlabel('Time [h]')
-ylabel('Val [Km]')
-legend([dispe, knowl], 'Dispersion', 'Knowledge')
-title('Dispersion vs Knowledge GREEDY')
-
 %Confronto dispersion e knowledge
 figure(8)
 dispersion_posMCTS = vecnorm(ref_trajectory_total_MCTS(:, 1:3)-real_trajectory_total_MCTS(:, 1:3), 2, 2);
@@ -519,3 +507,37 @@ xlabel('Time [h]')
 ylabel('Val [Km]')
 legend([dispe, knowl], 'Dispersion', 'Knowledge')
 title('Dispersion vs Knowledge MCTS')
+
+magn_maneuvres = {};
+magn_corrections1 = {};
+magn_corrections2 = {};
+for i = 1:size(actual_maneuvres, 1)
+    for j = 1:size(actual_maneuvres, 2)
+        magn_maneuvres{i,j} = norm(actual_maneuvres{i,j});
+        magn_corrections1{i,j} = norm(correction1{i, j});
+        magn_corrections2{i,j} = norm(correction2{i, j});
+        
+    end
+end
+
+%Arc duration
+arc_duration_MCTS = [];
+arc_duration_GREEDY = [];
+for i = 1:length(action_times_list_MCTS)-1
+    arc_duration_MCTS(i) = (action_times_list_MCTS(i+1)-action_times_list_MCTS(i))/3600;
+    arc_duration_GREEDY(i) = (action_times_list_GREEDY(i+1)-action_times_list_GREEDY(i))/3600;
+end
+n_arcs = length(arc_duration_MCTS);
+x = 1:n_arcs;
+Y = [arc_duration_MCTS(:), arc_duration_GREEDY(:)];
+
+figure(9)
+bar(x, Y)  % colonnine affiancate
+xlabel('Numero arco');
+ylabel('Durata arco [ore]');
+title('Durata degli archi MCTS vs GREEDY');
+legend('MCTS', 'GREEDY');
+grid on
+grid minor
+yline(spacecraft_data.data_guidance.Th_max/3600, '--')
+yline(spacecraft_data.data_guidance.DeltaT_after_man/3600, '--')

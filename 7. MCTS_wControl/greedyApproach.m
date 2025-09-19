@@ -187,7 +187,7 @@ nav_score_total        = concatScalarCellsAligned(nav_scores,       real_times, 
 if spacecraft_data.data_guidance.measurement_noise == 0
     P_total = zeros(6,6, length(tt_all));
 else
-    P_total = concatCovCellsAligned(P_all, real_times, real_trajectory, N_set+1);
+    P_total = concatCovCellsAligned(P_all, real_times, real_trajectory, n_actions+1);
 end
 
 spacecraft_data_out = spacecraft_data_real;

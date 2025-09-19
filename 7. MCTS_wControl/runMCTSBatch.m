@@ -1,7 +1,7 @@
 function [all_trees, real_trajectory, filter_trajectory, ref_trajectory, P_all, real_times, ...
   mapping_scores, exploiting_scores, nav_scores, ...
   action_times, all_flag, planned_actions, real_trajectory_total, ref_trajectory_total, filter_trajectory_total, ...
-  tt_all, mapping_score_total, exploiting_score_total, nav_score_total, P_total, spacecraft_data_out, correction1, correction2] = ...
+  tt_all, mapping_score_total, exploiting_score_total, nav_score_total, P_total, spacecraft_data_out, correction1, correction2, actual_maneuvres] = ...
     runMCTSBatch(spacecraft_data, r0, v0, t0, P0, iterations, n_trees, options)
 
 %Questa funzione esegue n_trees alberi MCTS da iterations iterazioni in sequenza e aggrega i risultati.
@@ -50,7 +50,7 @@ N_set = zeros(n_trees, 1);
 
 correction1 = {};
 correction2 = {};
-
+actual_maneuvres = {};
 for i = 1:n_trees
 %----PLANNING PHASE---------------------------------
     % 1) Tree search e best path
@@ -90,6 +90,8 @@ for i = 1:n_trees
         t_start = action_times{i,j};
         tf = final_times{i, j};
         real_P_start(4:6, 4:6) = real_P_start(4:6, 4:6) + P_man1; 
+        
+        actual_maneuvres{i,j} = uu_real1;
         
         %Propagate real trajectory
         [tt, xx] = ode78(@(t,x) truth_dyn(t, x), t_start:100:tf, [real_r_start; real_v_start+uu_real1], options);
